@@ -19,7 +19,7 @@ A Home Assistant integration for [Parqet](https://www.parqet.com) — the portfo
 ## Features
 
 - **OAuth2 + PKCE authentication** — secure, one-click setup via Parqet Connect
-- **22 sensors per portfolio** — total value, XIRR, TTWROR, unrealized/realized gains, dividends, fees, taxes, allocations, and more
+- **23 sensors per portfolio** — total value, XIRR, TTWROR, unrealized/realized gains, dividends, fees, taxes, allocations, and more
 - **Multi-portfolio support** — track multiple portfolios from a single Parqet account
 - **Lovelace companion card** with three views:
   - **Performance** — KPI grid, interval selector (1D to Max), stacked breakdown chart
@@ -90,7 +90,7 @@ After setup, click the gear icon on any portfolio entry to configure:
 
 ## Sensors
 
-Each portfolio creates **22 sensors** and **1 calendar entity**.
+Each portfolio creates **23 sensors** and **1 calendar entity**.
 
 ### Core Sensors
 
@@ -277,7 +277,7 @@ logger:
 
 | Issue | Solution |
 |-------|----------|
-| "Missing configuration" during setup | Restart HA and try again — the OAuth implementation registers on startup |
+| "Missing configuration" during setup | Ensure you've restarted HA after installing the integration — OAuth registers on first load |
 | Sensors show "unavailable" | Check that your Parqet OAuth token hasn't expired; re-authenticate in integration settings |
 | Card shows "No Parqet portfolios found" | Ensure the integration is set up with at least one portfolio |
 | Holdings/Activities fail to load | Delete and re-add the integration to refresh entity attributes |
@@ -299,7 +299,7 @@ cd ha-parqet-companion
 npm install && npm run build
 
 # Python tests
-pip install -r requirements_test.txt
+pip install pytest pytest-asyncio pytest-homeassistant-custom-component
 pytest tests/
 
 # Lint
@@ -315,7 +315,7 @@ custom_components/parqet/
 ├── calendar.py          # Calendar entity (activities as events)
 ├── config_flow.py       # OAuth2 + PKCE + portfolio selection
 ├── coordinator.py       # DataUpdateCoordinator (polls every 15 min)
-├── sensor.py            # 22 sensor entities per portfolio
+├── sensor.py            # 23 sensor entities per portfolio
 ├── diagnostics.py       # Debug data export with token redaction
 ├── websocket_api.py     # WebSocket commands for frontend card
 └── frontend/
@@ -329,7 +329,7 @@ src/                     # TypeScript source for Lovelace card
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](https://github.com/cubinet-code/ha-parqet-companion/blob/main/LICENSE) for details.
 
 ## Acknowledgments
 
