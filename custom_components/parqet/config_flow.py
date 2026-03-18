@@ -24,6 +24,8 @@ from homeassistant.helpers.selector import (
 
 from .api import ParqetApiClient, ParqetApiError
 from .const import (
+    AUTHORIZE_URL,
+    CLIENT_ID,
     CONF_CURRENCY,
     CONF_INTERVAL,
     CONF_PORTFOLIO_ID,
@@ -35,6 +37,7 @@ from .const import (
     INTERVALS,
     MIN_SCAN_INTERVAL_MIN,
     SCOPES,
+    TOKEN_URL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -77,8 +80,32 @@ class ParqetOAuth2FlowHandler(
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the user step."""
+        """Handle the user step, ensuring OAuth implementation is registered."""
+        await self._ensure_implementation()
         return await super().async_step_user(user_input)
+
+    async def _ensure_implementation(self) -> None:
+        """Register the OAuth2 implementation if not already present.
+
+        This is needed when no config entries exist yet (first setup),
+        since async_setup only runs when entries are present.
+        """
+        implementations = await config_entry_oauth2_flow.async_get_implementations(
+            self.hass, DOMAIN
+        )
+        if not implementations:
+            config_entry_oauth2_flow.async_register_implementation(
+                self.hass,
+                DOMAIN,
+                config_entry_oauth2_flow.LocalOAuth2ImplementationWithPkce(
+                    self.hass,
+                    DOMAIN,
+                    CLIENT_ID,
+                    authorize_url=AUTHORIZE_URL,
+                    token_url=TOKEN_URL,
+                    client_secret="",
+                ),
+            )
 
     async def async_oauth_create_entry(self, data: dict) -> ConfigFlowResult:
         """Create an entry after OAuth2 authorization.
