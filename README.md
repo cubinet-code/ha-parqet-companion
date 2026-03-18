@@ -5,7 +5,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/cubinet-code/ha-parqet-companion/validate.yml?style=flat-square&label=CI)](https://github.com/cubinet-code/ha-parqet-companion/actions)
 
 <p align="center">
-  <img src="brand/logo.png" alt="Parqet Companion" width="200">
+  <img src="https://raw.githubusercontent.com/cubinet-code/ha-parqet-companion/main/brand/logo.png" alt="Parqet Companion" width="200">
 </p>
 
 # Parqet Companion for Home Assistant
@@ -13,7 +13,7 @@
 A Home Assistant integration for [Parqet](https://www.parqet.com) — the portfolio tracking platform. Track your investment portfolios with real-time sensors, a rich Lovelace card, and calendar-based activity history.
 
 <p align="center">
-  <img src="docs/screenshots/performance.png" alt="Performance View" width="700">
+  <img src="https://raw.githubusercontent.com/cubinet-code/ha-parqet-companion/main/docs/screenshots/performance.png" alt="Performance View" width="700">
 </p>
 
 ## Features
@@ -131,7 +131,7 @@ Each portfolio creates **22 sensors** and **1 calendar entity**.
 Each portfolio creates a calendar entity (`calendar.<portfolio>_activities`) that exposes transactions as calendar events. View them in HA's built-in Calendar view or use them in automations.
 
 <p align="center">
-  <img src="docs/screenshots/calendar.png" alt="Calendar View" width="700">
+  <img src="https://raw.githubusercontent.com/cubinet-code/ha-parqet-companion/main/docs/screenshots/calendar.png" alt="Calendar View" width="700">
 </p>
 
 ### Extra Attributes
@@ -190,7 +190,7 @@ activities_limit: 25
 All options are configurable through the HA visual editor — no YAML required.
 
 <p align="center">
-  <img src="docs/screenshots/editor.png" alt="Visual Editor" width="700">
+  <img src="https://raw.githubusercontent.com/cubinet-code/ha-parqet-companion/main/docs/screenshots/editor.png" alt="Visual Editor" width="700">
 </p>
 
 ### Views
@@ -198,19 +198,19 @@ All options are configurable through the HA visual editor — no YAML required.
 **Performance** — KPI grid with all key metrics, time interval selector, and a stacked breakdown chart.
 
 <p align="center">
-  <img src="docs/screenshots/performance.png" alt="Performance View" width="700">
+  <img src="https://raw.githubusercontent.com/cubinet-code/ha-parqet-companion/main/docs/screenshots/performance.png" alt="Performance View" width="700">
 </p>
 
 **Holdings** — Donut allocation chart (top 20 + "Other" bucket) and a sortable table with logos, P&L, and weights.
 
 <p align="center">
-  <img src="docs/screenshots/holdings.png" alt="Holdings View" width="700">
+  <img src="https://raw.githubusercontent.com/cubinet-code/ha-parqet-companion/main/docs/screenshots/holdings.png" alt="Holdings View" width="700">
 </p>
 
 **Activities** — Filtered transaction list with type badges, asset names, and pagination.
 
 <p align="center">
-  <img src="docs/screenshots/activities.png" alt="Activities View" width="700">
+  <img src="https://raw.githubusercontent.com/cubinet-code/ha-parqet-companion/main/docs/screenshots/activities.png" alt="Activities View" width="700">
 </p>
 
 ## WebSocket API
@@ -259,7 +259,7 @@ Fetch activities with optional filtering and pagination.
 Each portfolio appears as a device with all sensors, calendar entity, diagnostics, and automation support.
 
 <p align="center">
-  <img src="docs/screenshots/sensors.png" alt="Device Page" width="700">
+  <img src="https://raw.githubusercontent.com/cubinet-code/ha-parqet-companion/main/docs/screenshots/sensors.png" alt="Device Page" width="700">
 </p>
 
 ## Troubleshooting
