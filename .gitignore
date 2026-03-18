@@ -1,0 +1,44 @@
+node_modules/
+
+# Dev artefacts
+*.log
+.DS_Store
+.env
+
+# Source maps
+*.js.map
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# Virtual environments
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code (local dev tooling)
+.claude/
+
+# Local dev scripts
+deploy.sh
+
+# API specs (development reference only)
+current.json
+
+# Task tracking
+tasks/
+CLAUDE.md

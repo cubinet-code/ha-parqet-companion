@@ -1,0 +1,74 @@
+{
+  "config": {
+    "step": {
+      "pick_implementation": {
+        "title": "Pick authentication method",
+        "description": "Pick an authentication method to connect to your Parqet account."
+      },
+      "pick_portfolio": {
+        "title": "Select Portfolio",
+        "description": "Choose which portfolio to track as a Home Assistant device.",
+        "data": {
+          "portfolio_id": "Portfolio"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate with Parqet",
+        "description": "Your Parqet session has expired. Please re-authenticate to continue receiving portfolio data."
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Parqet API.",
+      "invalid_auth": "Invalid authentication.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This portfolio is already configured.",
+      "cannot_connect": "Failed to connect to Parqet API.",
+      "no_portfolios": "No portfolios found in your Parqet account.",
+      "reauth_successful": "Re-authentication was successful.",
+      "unknown": "Unexpected error.",
+      "oauth_error": "Error receiving access token."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Parqet Options",
+        "data": {
+          "interval": "Performance interval",
+          "scan_interval": "Update frequency (minutes)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "calendar": {
+      "activities": { "name": "Activities" }
+    },
+    "sensor": {
+      "total_value": { "name": "Total value" },
+      "xirr": { "name": "XIRR" },
+      "ttwror": { "name": "TTWROR" },
+      "unrealized_gain": { "name": "Unrealized gain" },
+      "realized_gain": { "name": "Realized gain" },
+      "dividends": { "name": "Dividends" },
+      "fees": { "name": "Fees" },
+      "taxes": { "name": "Taxes" },
+      "valuation_start": { "name": "Valuation at interval start" },
+      "unrealized_gain_net": { "name": "Unrealized gain (net)" },
+      "unrealized_return_gross": { "name": "Unrealized return (gross)" },
+      "unrealized_return_net": { "name": "Unrealized return (net)" },
+      "realized_gain_net": { "name": "Realized gain (net)" },
+      "realized_return_gross": { "name": "Realized return (gross)" },
+      "realized_return_net": { "name": "Realized return (net)" },
+      "dividends_net": { "name": "Dividends (net)" },
+      "dividends_taxes": { "name": "Dividend taxes" },
+      "dividends_fees": { "name": "Dividend fees" },
+      "holdings_count": { "name": "Holdings count" },
+      "net_allocation": { "name": "Net allocation" },
+      "positive_allocation": { "name": "Positive allocation" },
+      "negative_allocation": { "name": "Negative allocation" }
+    }
+  }
+}

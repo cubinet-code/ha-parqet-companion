@@ -1,0 +1,12 @@
+{
+  "domain": "parqet",
+  "name": "Parqet Companion",
+  "codeowners": ["@cubinet-code"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/cubinet-code/ha-parqet-companion",
+  "homeassistant": "2024.8.0",
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "version": "0.1.0"
+}
