@@ -40,7 +40,7 @@ A Home Assistant integration for [Parqet](https://www.parqet.com) — the portfo
 
 ### HACS (Recommended)
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=cubinet-code&repository=ha-parqet&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=cubinet-code&repository=ha-parqet-companion&category=integration)
 
 Or manually:
 
@@ -293,7 +293,7 @@ Contributions are welcome! This integration aims to become an official HA core i
 ```bash
 # Clone
 git clone https://github.com/cubinet-code/ha-parqet-companion.git
-cd ha-parqet
+cd ha-parqet-companion
 
 # Frontend
 npm install && npm run build
