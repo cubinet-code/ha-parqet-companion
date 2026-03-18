@@ -1,0 +1,74 @@
+{
+  "config": {
+    "step": {
+      "pick_implementation": {
+        "title": "Authentifizierungsmethode wählen",
+        "description": "Wähle eine Authentifizierungsmethode, um dich mit deinem Parqet-Konto zu verbinden."
+      },
+      "pick_portfolio": {
+        "title": "Portfolio auswählen",
+        "description": "Wähle das Portfolio, das als Home Assistant Gerät verfolgt werden soll.",
+        "data": {
+          "portfolio_id": "Portfolio"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Erneut bei Parqet anmelden",
+        "description": "Deine Parqet-Sitzung ist abgelaufen. Bitte melde dich erneut an, um weiterhin Portfoliodaten zu erhalten."
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zur Parqet-API fehlgeschlagen.",
+      "invalid_auth": "Ungültige Authentifizierung.",
+      "unknown": "Unerwarteter Fehler."
+    },
+    "abort": {
+      "already_configured": "Dieses Portfolio ist bereits konfiguriert.",
+      "cannot_connect": "Verbindung zur Parqet-API fehlgeschlagen.",
+      "no_portfolios": "Keine Portfolios in deinem Parqet-Konto gefunden.",
+      "reauth_successful": "Erneute Authentifizierung war erfolgreich.",
+      "unknown": "Unerwarteter Fehler.",
+      "oauth_error": "Fehler beim Empfang des Zugriffstokens."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Parqet Optionen",
+        "data": {
+          "interval": "Performance-Intervall",
+          "scan_interval": "Aktualisierungsintervall (Minuten)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "calendar": {
+      "activities": { "name": "Aktivitäten" }
+    },
+    "sensor": {
+      "total_value": { "name": "Gesamtwert" },
+      "xirr": { "name": "XIRR" },
+      "ttwror": { "name": "TTWROR" },
+      "unrealized_gain": { "name": "Unrealisierter Gewinn" },
+      "realized_gain": { "name": "Realisierter Gewinn" },
+      "dividends": { "name": "Dividenden" },
+      "fees": { "name": "Gebühren" },
+      "taxes": { "name": "Steuern" },
+      "valuation_start": { "name": "Bewertung zu Intervallbeginn" },
+      "unrealized_gain_net": { "name": "Unrealisierter Gewinn (netto)" },
+      "unrealized_return_gross": { "name": "Unrealisierte Rendite (brutto)" },
+      "unrealized_return_net": { "name": "Unrealisierte Rendite (netto)" },
+      "realized_gain_net": { "name": "Realisierter Gewinn (netto)" },
+      "realized_return_gross": { "name": "Realisierte Rendite (brutto)" },
+      "realized_return_net": { "name": "Realisierte Rendite (netto)" },
+      "dividends_net": { "name": "Dividenden (netto)" },
+      "dividends_taxes": { "name": "Dividendensteuern" },
+      "dividends_fees": { "name": "Dividendengebühren" },
+      "holdings_count": { "name": "Anzahl Positionen" },
+      "net_allocation": { "name": "Nettoallokation" },
+      "positive_allocation": { "name": "Positive Allokation" },
+      "negative_allocation": { "name": "Negative Allokation" }
+    }
+  }
+}

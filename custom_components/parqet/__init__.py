@@ -76,7 +76,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ParqetConfigEntry) -> bo
     scan_interval_min = entry.options.get(CONF_SCAN_INTERVAL)
 
     coordinator = ParqetDataUpdateCoordinator(
-        hass, api, portfolio_id, portfolio_name, interval, scan_interval_min
+        hass, api, portfolio_id, portfolio_name, interval, scan_interval_min,
+        config_entry=entry,
     )
 
     await coordinator.async_config_entry_first_refresh()

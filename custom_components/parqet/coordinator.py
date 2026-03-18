@@ -6,6 +6,7 @@ import logging
 from datetime import timedelta
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -27,6 +28,7 @@ class ParqetDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         portfolio_name: str,
         interval: str = DEFAULT_INTERVAL,
         scan_interval_min: int | None = None,
+        config_entry: ConfigEntry | None = None,
     ) -> None:
         """Initialize the coordinator."""
         update_interval = (
@@ -37,6 +39,7 @@ class ParqetDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=f"Parqet {portfolio_name}",
             update_interval=update_interval,
             always_update=False,

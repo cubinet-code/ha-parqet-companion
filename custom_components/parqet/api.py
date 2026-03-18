@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -62,9 +63,14 @@ class ParqetApiClient:
             "Authorization": f"Bearer {token}",
         }
         try:
-            async with self._session.get(url, headers=headers) as resp:
-                body = await resp.read()
-                return _handle_response(resp, body)
+            async with asyncio.timeout(30):
+                async with self._session.get(url, headers=headers) as resp:
+                    body = await resp.read()
+                    return _handle_response(resp, body)
+        except TimeoutError as err:
+            raise ParqetConnectionError(
+                f"Timeout fetching {path}"
+            ) from err
         except ParqetApiError:
             raise
         except aiohttp.ClientError as err:
@@ -81,11 +87,16 @@ class ParqetApiClient:
             "Content-Type": "application/json",
         }
         try:
-            async with self._session.post(
-                url, headers=headers, json=data
-            ) as resp:
-                body = await resp.read()
-                return _handle_response(resp, body)
+            async with asyncio.timeout(30):
+                async with self._session.post(
+                    url, headers=headers, json=data
+                ) as resp:
+                    body = await resp.read()
+                    return _handle_response(resp, body)
+        except TimeoutError as err:
+            raise ParqetConnectionError(
+                f"Timeout posting {path}"
+            ) from err
         except ParqetApiError:
             raise
         except aiohttp.ClientError as err:
