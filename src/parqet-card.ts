@@ -24,7 +24,7 @@ w['customCards'].push({
   name: 'Parqet Companion',
   description: 'Display your Parqet portfolio data — performance, holdings and activities.',
   preview: true,
-  documentationURL: 'https://github.com/cubinet-code/ha-parqet',
+  documentationURL: 'https://github.com/cubinet-code/ha-parqet-companion',
 });
 
 // ─── Card element ─────────────────────────────────────────────────────────────
