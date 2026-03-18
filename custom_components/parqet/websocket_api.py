@@ -20,6 +20,18 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_performance)
 
 
+def _require_admin(
+    connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> bool:
+    """Check that the user is an admin, sending an error if not."""
+    if not connection.user.is_admin:
+        connection.send_error(
+            msg["id"], "unauthorized", "Admin access required"
+        )
+        return False
+    return True
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "parqet/get_holdings",
@@ -33,6 +45,9 @@ def ws_get_holdings(
     msg: dict[str, Any],
 ) -> None:
     """Return holdings from coordinator cached data."""
+    if not _require_admin(connection, msg):
+        return
+
     entry_id = msg["entry_id"]
     entry = hass.config_entries.async_get_entry(entry_id)
 
@@ -64,6 +79,9 @@ async def ws_get_activities(
     msg: dict[str, Any],
 ) -> None:
     """Fetch activities on demand from the Parqet API."""
+    if not _require_admin(connection, msg):
+        return
+
     entry_id = msg["entry_id"]
     entry = hass.config_entries.async_get_entry(entry_id)
 
@@ -101,6 +119,9 @@ async def ws_get_performance(
     msg: dict[str, Any],
 ) -> None:
     """Fetch performance data on demand with a specific interval."""
+    if not _require_admin(connection, msg):
+        return
+
     entry_id = msg["entry_id"]
     entry = hass.config_entries.async_get_entry(entry_id)
 

@@ -34,14 +34,10 @@ type ParqetConfigEntry = ConfigEntry[ParqetDataUpdateCoordinator]
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Parqet integration."""
-    from homeassistant.helpers.config_entry_oauth2_flow import (
-        LocalOAuth2ImplementationWithPkce,
-    )
-
     config_entry_oauth2_flow.async_register_implementation(
         hass,
         DOMAIN,
-        LocalOAuth2ImplementationWithPkce(
+        config_entry_oauth2_flow.LocalOAuth2ImplementationWithPkce(
             hass,
             DOMAIN,
             CLIENT_ID,

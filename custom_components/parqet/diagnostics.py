@@ -9,8 +9,8 @@ from homeassistant.core import HomeAssistant
 
 from . import ParqetConfigEntry
 
-TO_REDACT_CONFIG = {"access_token", "refresh_token", "token"}
-TO_REDACT_DATA = {"id", "userId", "installationId"}
+TO_REDACT_CONFIG = {"token"}
+TO_REDACT_DATA = {"userId", "installationId"}
 
 
 async def async_get_config_entry_diagnostics(

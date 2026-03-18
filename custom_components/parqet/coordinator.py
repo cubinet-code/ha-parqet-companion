@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import ParqetApiClient, ParqetAuthError, ParqetConnectionError
+from .api import ParqetApiClient, ParqetApiError, ParqetAuthError, ParqetConnectionError
 from .const import DEFAULT_INTERVAL, DEFAULT_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,4 +58,8 @@ class ParqetDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except ParqetConnectionError as err:
             raise UpdateFailed(
                 f"Error communicating with Parqet API: {err}"
+            ) from err
+        except ParqetApiError as err:
+            raise UpdateFailed(
+                f"Parqet API error: {err}"
             ) from err

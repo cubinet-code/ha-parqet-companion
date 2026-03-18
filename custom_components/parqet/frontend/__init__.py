@@ -12,8 +12,18 @@ from homeassistant.core import HomeAssistant
 _LOGGER = logging.getLogger(__name__)
 
 FRONTEND_DIR = Path(__file__).parent
-CARD_JS_URL = "/parqet/parqet-card.js"
 CARD_JS_PATH = FRONTEND_DIR / "parqet-card.js"
+
+# Read version from manifest for cache-busting.
+_MANIFEST = FRONTEND_DIR.parent / "manifest.json"
+try:
+    import json as _json
+
+    _VERSION = _json.loads(_MANIFEST.read_text()).get("version", "0")
+except Exception:
+    _VERSION = "0"
+
+CARD_JS_URL = f"/parqet/parqet-card.js?v={_VERSION}"
 
 
 async def async_register_frontend(hass: HomeAssistant) -> None:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
@@ -148,13 +148,22 @@ class ParqetActivityCalendar(
             entry_type=DeviceEntryType.SERVICE,
         )
         self._portfolio_id = portfolio_id
+        self._cached_events: list[CalendarEvent] = []
 
     @property
     def event(self) -> CalendarEvent | None:
-        """Return the most recent activity as the current event."""
-        # We don't have cached activities in the coordinator — return None.
-        # The async_get_events method handles date-range queries.
-        return None
+        """Return the next upcoming or most recent activity as the current event."""
+        if not self._cached_events:
+            return None
+
+        today = date.today()
+        # Find the next upcoming event (on or after today).
+        for evt in self._cached_events:
+            if evt.start >= today:
+                return evt
+
+        # No upcoming event — return the most recent past event.
+        return self._cached_events[-1]
 
     def _build_holdings_map(self) -> dict[str, str]:
         """Build a holding_id → display_name map from coordinator data."""
@@ -194,10 +203,13 @@ class ParqetActivityCalendar(
             except (ValueError, AttributeError):
                 continue
 
-            # Filter to requested date range.
-            if dt.date() < start_date.date() or dt.date() > end_date.date():
+            # Filter to requested date range (start inclusive, end exclusive).
+            if dt.date() < start_date.date() or dt.date() >= end_date.date():
                 continue
 
             events.append(_activity_to_event(activity, holdings_map))
+
+        # Cache for the event property.
+        self._cached_events = events
 
         return events

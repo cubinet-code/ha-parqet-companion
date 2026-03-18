@@ -60,7 +60,6 @@ class ParqetApiClient:
         token = await self._get_access_token()
         headers = {
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
         }
         try:
             async with self._session.get(url, headers=headers) as resp:
@@ -166,4 +165,9 @@ def _handle_response(resp: aiohttp.ClientResponse, body: bytes) -> Any:
         raise ParqetApiError(
             f"API error ({resp.status}): {body.decode('utf-8', errors='replace')}"
         )
-    return json.loads(body)
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError as err:
+        raise ParqetApiError(
+            f"Invalid JSON response ({resp.status})"
+        ) from err

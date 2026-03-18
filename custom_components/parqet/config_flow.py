@@ -8,7 +8,6 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import (
-    SOURCE_IMPORT,
     SOURCE_REAUTH,
     ConfigEntry,
     ConfigFlowResult,
@@ -16,11 +15,15 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers import aiohttp_client, config_entry_oauth2_flow
+from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 
 from .api import ParqetApiClient, ParqetApiError
 from .const import (
-    AUTHORIZE_URL,
-    CLIENT_ID,
     CONF_CURRENCY,
     CONF_INTERVAL,
     CONF_PORTFOLIO_ID,
@@ -32,7 +35,6 @@ from .const import (
     INTERVALS,
     MIN_SCAN_INTERVAL_MIN,
     SCOPES,
-    TOKEN_URL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,7 +51,9 @@ class ParqetOAuth2FlowHandler(
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> ParqetOptionsFlowHandler:
+    def async_get_options_flow(
+        config_entry: ConfigEntry,
+    ) -> ParqetOptionsFlowHandler:
         """Get the options flow handler."""
         return ParqetOptionsFlowHandler()
 
@@ -73,32 +77,8 @@ class ParqetOAuth2FlowHandler(
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the user step, ensuring OAuth implementation is registered."""
-        await self._ensure_implementation()
+        """Handle the user step."""
         return await super().async_step_user(user_input)
-
-    async def _ensure_implementation(self) -> None:
-        """Register the OAuth2 implementation if not already present."""
-        implementations = await config_entry_oauth2_flow.async_get_implementations(
-            self.hass, DOMAIN
-        )
-        if not implementations:
-            from homeassistant.helpers.config_entry_oauth2_flow import (
-                LocalOAuth2ImplementationWithPkce,
-            )
-
-            config_entry_oauth2_flow.async_register_implementation(
-                self.hass,
-                DOMAIN,
-                LocalOAuth2ImplementationWithPkce(
-                    self.hass,
-                    DOMAIN,
-                    CLIENT_ID,
-                    authorize_url=AUTHORIZE_URL,
-                    token_url=TOKEN_URL,
-                    client_secret="",
-                ),
-            )
 
     async def async_oauth_create_entry(self, data: dict) -> ConfigFlowResult:
         """Create an entry after OAuth2 authorization.
@@ -145,18 +125,24 @@ class ParqetOAuth2FlowHandler(
             if not selected:
                 return self.async_abort(reason="unknown")
 
-            # Create additional entries via import flows (they complete
-            # immediately without user interaction).
+            # Create additional entries for all but the last.
+            existing = {
+                entry.unique_id for entry in self._async_current_entries()
+            }
             for portfolio in selected[:-1]:
+                portfolio_id = portfolio["id"]
+                unique_id = f"{self._user_id}_{portfolio_id}"
+                if unique_id in existing:
+                    continue
                 await self.hass.config_entries.flow.async_init(
                     DOMAIN,
-                    context={"source": SOURCE_IMPORT},
+                    context={"source": "batch_create"},
                     data={
-                        **self._oauth_data,
-                        CONF_PORTFOLIO_ID: portfolio["id"],
+                        "oauth_data": self._oauth_data,
+                        "user_id": self._user_id,
+                        CONF_PORTFOLIO_ID: portfolio_id,
                         CONF_PORTFOLIO_NAME: portfolio["name"],
                         CONF_CURRENCY: portfolio.get("currency", "EUR"),
-                        "_user_id": self._user_id,
                     },
                 )
 
@@ -175,13 +161,6 @@ class ParqetOAuth2FlowHandler(
 
         if len(available) == 1:
             return await self._create_portfolio_entry(available[0])
-
-        from homeassistant.helpers.selector import (
-            SelectOptionDict,
-            SelectSelector,
-            SelectSelectorConfig,
-            SelectSelectorMode,
-        )
 
         options = [
             SelectOptionDict(value=p["id"], label=p["name"])
@@ -242,20 +221,26 @@ class ParqetOAuth2FlowHandler(
             },
         )
 
-    async def async_step_import(
-        self, import_data: dict[str, Any]
+    async def async_step_batch_create(
+        self, data: dict[str, Any]
     ) -> ConfigFlowResult:
-        """Handle import flow for batch portfolio creation."""
-        user_id = import_data.pop("_user_id", None)
-        portfolio_id = import_data[CONF_PORTFOLIO_ID]
+        """Handle batch portfolio creation from multi-select flow."""
+        user_id = data["user_id"]
+        portfolio_id = data[CONF_PORTFOLIO_ID]
+        oauth_data = data["oauth_data"]
 
         unique_id = f"{user_id}_{portfolio_id}"
         await self.async_set_unique_id(unique_id)
         self._abort_if_unique_id_configured()
 
         return self.async_create_entry(
-            title=import_data[CONF_PORTFOLIO_NAME],
-            data=import_data,
+            title=data[CONF_PORTFOLIO_NAME],
+            data={
+                **oauth_data,
+                CONF_PORTFOLIO_ID: portfolio_id,
+                CONF_PORTFOLIO_NAME: data[CONF_PORTFOLIO_NAME],
+                CONF_CURRENCY: data.get(CONF_CURRENCY, "EUR"),
+            },
         )
 
     async def async_step_reauth(
