@@ -4,11 +4,7 @@
 [![License: MIT](https://img.shields.io/github/license/cubinet-code/ha-parqet-companion?style=flat-square)](https://github.com/cubinet-code/ha-parqet-companion/blob/main/LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/cubinet-code/ha-parqet-companion/validate.yml?style=flat-square&label=CI)](https://github.com/cubinet-code/ha-parqet-companion/actions)
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/cubinet-code/ha-parqet-companion/main/brand/logo.png" alt="Parqet Companion" width="200">
-</p>
-
-# Parqet Companion for Home Assistant
+# <img src="https://raw.githubusercontent.com/cubinet-code/ha-parqet-companion/main/brand/logo.png" alt="Parqet Companion" width="48" valign="middle"> Parqet Companion for Home Assistant
 
 A Home Assistant integration for [Parqet](https://www.parqet.com) — the portfolio tracking platform. Track your investment portfolios with real-time sensors, a rich Lovelace card, and calendar-based activity history.
 
