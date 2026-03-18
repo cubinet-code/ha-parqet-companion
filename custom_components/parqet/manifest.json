@@ -5,7 +5,6 @@
   "config_flow": true,
   "dependencies": ["http", "frontend"],
   "documentation": "https://github.com/cubinet-code/ha-parqet-companion",
-  "homeassistant": "2024.8.0",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/cubinet-code/ha-parqet-companion/issues",
