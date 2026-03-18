@@ -23,7 +23,8 @@ try:
 except Exception:
     _VERSION = "0"
 
-CARD_JS_URL = f"/parqet/parqet-card.js?v={_VERSION}"
+CARD_JS_URL = "/parqet/parqet-card.js"
+CARD_JS_URL_VERSIONED = f"{CARD_JS_URL}?v={_VERSION}"
 
 
 async def async_register_frontend(hass: HomeAssistant) -> None:
@@ -32,12 +33,12 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
         _LOGGER.warning("Parqet card JS not found at %s", CARD_JS_PATH)
         return
 
-    # Serve the JS file at /parqet/parqet-card.js.
+    # Serve the JS file at /parqet/parqet-card.js (clean path, no query params).
     await hass.http.async_register_static_paths(
         [StaticPathConfig(CARD_JS_URL, str(CARD_JS_PATH), cache_headers=True)]
     )
 
-    # Tell HA to load the JS on every frontend page.
-    add_extra_js_url(hass, CARD_JS_URL)
+    # Tell HA to load the JS on every frontend page (versioned URL for cache-busting).
+    add_extra_js_url(hass, CARD_JS_URL_VERSIONED)
 
-    _LOGGER.debug("Registered Parqet card frontend at %s", CARD_JS_URL)
+    _LOGGER.debug("Registered Parqet card frontend at %s", CARD_JS_URL_VERSIONED)
