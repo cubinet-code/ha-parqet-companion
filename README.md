@@ -156,13 +156,18 @@ The integration bundles a Lovelace companion card that is automatically register
 type: custom:parqet-companion-card
 default_view: performance
 default_interval: 1y
-show_chart: true
-show_interval_selector: true
-show_logo: true
-compact: false
 currency_symbol: "€"
+# Performance
+show_interval_selector: true
+show_performance_chart: true
+# Holdings
+show_allocation_chart: true
+show_logo: true
 holdings_limit: 50
+# Activities
 activities_limit: 25
+# Layout
+compact: false
 ```
 
 ### Card Options
@@ -175,9 +180,10 @@ activities_limit: 25
 | `currency_symbol` | string | `€` | Currency symbol for formatting |
 | `holdings_limit` | number | `50` | Maximum holdings shown in table |
 | `activities_limit` | number | `25` | Activities loaded per page |
-| `show_interval_selector` | boolean | `true` | Show interval picker |
-| `show_chart` | boolean | `true` | Show charts (stacked bar / donut) |
-| `show_logo` | boolean | `true` | Show holding logos |
+| `show_interval_selector` | boolean | `true` | Show interval picker (Performance) |
+| `show_performance_chart` | boolean | `true` | Show stacked breakdown chart (Performance) |
+| `show_allocation_chart` | boolean | `true` | Show donut allocation chart (Holdings) |
+| `show_logo` | boolean | `true` | Show holding logos (Holdings) |
 | `compact` | boolean | `false` | Compact KPI grid layout |
 | `hide_header` | boolean | `false` | Hide portfolio name header |
 
