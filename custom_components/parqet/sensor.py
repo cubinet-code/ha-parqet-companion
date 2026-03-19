@@ -36,6 +36,15 @@ class ParqetSensorEntityDescription(SensorEntityDescription):
     # Whether this sensor is enabled by default.
     entity_registry_enabled_default: bool = True
 
+    def __post_init__(self) -> None:
+        """Set state_class based on device_class if not explicitly provided."""
+        # HA requires MONETARY sensors to use TOTAL, not MEASUREMENT.
+        if (
+            self.device_class == SensorDeviceClass.MONETARY
+            and self.state_class == SensorStateClass.MEASUREMENT
+        ):
+            object.__setattr__(self, "state_class", SensorStateClass.TOTAL)
+
 
 def _resolve_path(data: dict[str, Any], path: str) -> Any:
     """Resolve a dot-separated path into a nested dict, returning None on miss."""

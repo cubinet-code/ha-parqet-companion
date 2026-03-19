@@ -109,7 +109,7 @@ export class ParqetCompanionCard extends LitElement {
         },
         {
           name: 'holdings_limit',
-          selector: { number: { min: 5, max: 200, mode: 'box' } },
+          selector: { number: { min: 1, max: 200, mode: 'box' } },
         },
         {
           name: 'activities_limit',
