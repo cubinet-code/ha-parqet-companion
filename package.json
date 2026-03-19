@@ -1,6 +1,6 @@
 {
   "name": "ha-parqet-companion",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Home Assistant integration for Parqet portfolio tracking",
   "private": true,
   "keywords": [
