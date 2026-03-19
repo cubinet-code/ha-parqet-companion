@@ -125,7 +125,7 @@ export class ParqetPerformanceView extends LitElement {
           ${this._kpi('Fees', fmtCurrency(d.fees?.inInterval?.fees, this._sym()))}
           ${this._kpi('Taxes', fmtCurrency(d.taxes?.inInterval?.taxes, this._sym()))}
         </div>
-        ${this.config?.show_chart !== false ? this._renderChart(d) : ''}
+        ${(this.config?.show_performance_chart ?? this.config?.show_chart) !== false ? this._renderChart(d) : ''}
       ` : !this._loading ? html`<div class="empty">No data available.</div>` : ''}
     `;
   }

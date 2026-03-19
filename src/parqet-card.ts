@@ -44,7 +44,8 @@ export class ParqetCompanionCard extends LitElement {
       default_view: 'performance',
       default_interval: '1y',
       show_interval_selector: true,
-      show_chart: true,
+      show_performance_chart: true,
+      show_allocation_chart: true,
       show_logo: true,
       compact: false,
       currency_symbol: '€',
@@ -61,6 +62,7 @@ export class ParqetCompanionCard extends LitElement {
   static getConfigForm() {
     return {
       schema: [
+        // ── General ──
         {
           name: 'entity',
           selector: {
@@ -83,57 +85,97 @@ export class ParqetCompanionCard extends LitElement {
           },
         },
         {
-          name: 'default_interval',
-          selector: {
-            select: {
-              options: [
-                { value: '1d', label: '1 Day' },
-                { value: '1w', label: '1 Week' },
-                { value: 'mtd', label: 'Month to Date' },
-                { value: '1m', label: '1 Month' },
-                { value: '3m', label: '3 Months' },
-                { value: '6m', label: '6 Months' },
-                { value: '1y', label: '1 Year' },
-                { value: 'ytd', label: 'Year to Date' },
-                { value: '3y', label: '3 Years' },
-                { value: '5y', label: '5 Years' },
-                { value: '10y', label: '10 Years' },
-                { value: 'max', label: 'Maximum' },
-              ],
-            },
-          },
-        },
-        {
           name: 'currency_symbol',
           selector: { text: {} },
         },
+        // ── Performance ──
         {
-          name: 'holdings_limit',
-          selector: { number: { min: 1, max: 200, mode: 'box' } },
+          name: '',
+          type: 'expandable' as const,
+          title: 'Performance',
+          icon: 'mdi:chart-line',
+          schema: [
+            {
+              name: 'default_interval',
+              selector: {
+                select: {
+                  options: [
+                    { value: '1d', label: '1 Day' },
+                    { value: '1w', label: '1 Week' },
+                    { value: 'mtd', label: 'Month to Date' },
+                    { value: '1m', label: '1 Month' },
+                    { value: '3m', label: '3 Months' },
+                    { value: '6m', label: '6 Months' },
+                    { value: '1y', label: '1 Year' },
+                    { value: 'ytd', label: 'Year to Date' },
+                    { value: '3y', label: '3 Years' },
+                    { value: '5y', label: '5 Years' },
+                    { value: '10y', label: '10 Years' },
+                    { value: 'max', label: 'Maximum' },
+                  ],
+                },
+              },
+            },
+            {
+              name: 'show_interval_selector',
+              selector: { boolean: {} },
+            },
+            {
+              name: 'show_performance_chart',
+              selector: { boolean: {} },
+            },
+          ],
         },
+        // ── Holdings ──
         {
-          name: 'activities_limit',
-          selector: { number: { min: 1, max: 500, mode: 'box' } },
+          name: '',
+          type: 'expandable' as const,
+          title: 'Holdings',
+          icon: 'mdi:chart-donut',
+          schema: [
+            {
+              name: 'holdings_limit',
+              selector: { number: { min: 1, max: 200, mode: 'box' } },
+            },
+            {
+              name: 'show_allocation_chart',
+              selector: { boolean: {} },
+            },
+            {
+              name: 'show_logo',
+              selector: { boolean: {} },
+            },
+          ],
         },
+        // ── Activities ──
         {
-          name: 'show_interval_selector',
-          selector: { boolean: {} },
+          name: '',
+          type: 'expandable' as const,
+          title: 'Activities',
+          icon: 'mdi:format-list-bulleted',
+          schema: [
+            {
+              name: 'activities_limit',
+              selector: { number: { min: 1, max: 500, mode: 'box' } },
+            },
+          ],
         },
+        // ── Layout ──
         {
-          name: 'show_chart',
-          selector: { boolean: {} },
-        },
-        {
-          name: 'show_logo',
-          selector: { boolean: {} },
-        },
-        {
-          name: 'compact',
-          selector: { boolean: {} },
-        },
-        {
-          name: 'hide_header',
-          selector: { boolean: {} },
+          name: '',
+          type: 'expandable' as const,
+          title: 'Layout',
+          icon: 'mdi:page-layout-body',
+          schema: [
+            {
+              name: 'compact',
+              selector: { boolean: {} },
+            },
+            {
+              name: 'hide_header',
+              selector: { boolean: {} },
+            },
+          ],
         },
       ],
       computeLabel: (schema: { name: string }) => {
@@ -145,7 +187,8 @@ export class ParqetCompanionCard extends LitElement {
           holdings_limit: 'Holdings Limit',
           activities_limit: 'Activities Limit',
           show_interval_selector: 'Show Interval Selector',
-          show_chart: 'Show Chart',
+          show_performance_chart: 'Show Performance Chart',
+          show_allocation_chart: 'Show Allocation Chart',
           show_logo: 'Show Holding Logos',
           compact: 'Compact Mode',
           hide_header: 'Hide Header',
@@ -159,7 +202,8 @@ export class ParqetCompanionCard extends LitElement {
     return {
       default_view: 'performance',
       default_interval: '1y',
-      show_chart: true,
+      show_performance_chart: true,
+      show_allocation_chart: true,
       show_interval_selector: true,
       show_logo: true,
       compact: false,

@@ -117,7 +117,9 @@ export interface ParqetCardConfig {
   default_view?: ViewType;
   default_interval?: IntervalValue;
   show_interval_selector?: boolean;
-  show_chart?: boolean;
+  show_chart?: boolean; // legacy — falls back for both charts
+  show_performance_chart?: boolean;
+  show_allocation_chart?: boolean;
   show_logo?: boolean;
   compact?: boolean;
   hide_header?: boolean;

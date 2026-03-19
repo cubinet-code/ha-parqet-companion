@@ -94,7 +94,7 @@ export class ParqetHoldingsView extends LitElement {
     const sorted = this._sorted().slice(0, limit);
 
     return html`
-      ${this.config?.show_chart !== false ? html`
+      ${(this.config?.show_allocation_chart ?? this.config?.show_chart) !== false ? html`
         <parqet-donut-chart
           .segments=${(() => {
             const top = sorted.slice(0, 20).map((h, i) => ({
