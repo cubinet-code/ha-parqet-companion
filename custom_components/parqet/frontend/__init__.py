@@ -22,7 +22,7 @@ def _read_manifest_version() -> str:
     """Read the integration version from manifest.json."""
     try:
         return json.loads(_MANIFEST.read_text()).get("version", "0")
-    except Exception:  # noqa: BLE001
+    except Exception:
         return "0"
 
 

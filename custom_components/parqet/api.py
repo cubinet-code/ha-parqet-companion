@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
 import aiohttp
-
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from .const import API_BASE_URL
