@@ -15,7 +15,7 @@ A Home Assistant integration for [Parqet](https://www.parqet.com) — the portfo
 ## Features
 
 - **OAuth2 + PKCE authentication** — secure, one-click setup via Parqet Connect
-- **23 sensors per portfolio** — total value, XIRR, TTWROR, unrealized/realized gains, dividends, fees, taxes, allocations, and more
+- **22 sensors per portfolio** — total value, XIRR, TTWROR, unrealized/realized gains, dividends, fees, taxes, allocations, and more
 - **Multi-portfolio support** — track multiple portfolios from a single Parqet account
 - **Lovelace companion card** with three views:
   - **Performance** — KPI grid, interval selector (1D to Max), stacked breakdown chart
@@ -86,9 +86,9 @@ After setup, click the gear icon on any portfolio entry to configure:
 
 ## Sensors
 
-Each portfolio creates **23 sensors** and **1 calendar entity**.
+Each portfolio creates **22 sensors** and **1 calendar entity**. Core sensors are enabled by default; detailed and allocation sensors are disabled by default and can be enabled in the entity settings.
 
-### Core Sensors
+### Core Sensors (enabled by default)
 
 | Sensor | Description | Unit | Icon |
 |--------|-------------|------|------|
@@ -101,23 +101,21 @@ Each portfolio creates **23 sensors** and **1 calendar entity**.
 | Fees | Trading fees | Currency | `mdi:credit-card-outline` |
 | Taxes | Taxes paid | Currency | `mdi:receipt-text` |
 
-### Detailed Sensors
+### Detailed Sensors (disabled by default)
 
 | Sensor | Description | Unit |
 |--------|-------------|------|
 | Valuation at interval start | Portfolio value at start of period | Currency |
 | Unrealized gain (net) | After fees and taxes | Currency |
-| Unrealized return (gross/net) | Percentage return | % |
+| Unrealized return (gross) | Percentage return before costs | % |
+| Unrealized return (net) | Percentage return after costs | % |
 | Realized gain (net) | After fees and taxes | Currency |
-| Realized return (gross/net) | Percentage return | % |
+| Realized return (gross) | Percentage return before costs | % |
+| Realized return (net) | Percentage return after costs | % |
 | Dividends (net) | After taxes and fees | Currency |
-| Dividend taxes / fees | Breakdown of dividend costs | Currency |
+| Dividend taxes | Tax on dividends | Currency |
+| Dividend fees | Fees on dividends | Currency |
 | Holdings count | Number of active holdings | Count |
-
-### Allocation Sensors
-
-| Sensor | Description | Unit |
-|--------|-------------|------|
 | Net allocation | Net total (long minus short) | Currency |
 | Positive allocation | Total long positions | Currency |
 | Negative allocation | Total short/debt positions | Currency |
@@ -317,7 +315,8 @@ custom_components/parqet/
 ├── calendar.py          # Calendar entity (activities as events)
 ├── config_flow.py       # OAuth2 + PKCE + portfolio selection
 ├── coordinator.py       # DataUpdateCoordinator (polls every 15 min)
-├── sensor.py            # 23 sensor entities per portfolio
+├── entity.py            # Shared base entity class
+├── sensor.py            # 22 sensor entities per portfolio
 ├── diagnostics.py       # Debug data export with token redaction
 ├── websocket_api.py     # WebSocket commands for frontend card
 └── frontend/
