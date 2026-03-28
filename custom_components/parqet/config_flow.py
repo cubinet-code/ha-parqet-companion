@@ -44,6 +44,7 @@ from .const import (
     SCOPES,
     TOKEN_URL,
 )
+from .oauth import ParqetOAuth2Implementation
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -99,8 +100,6 @@ class ParqetOAuth2FlowHandler(
             self.hass, DOMAIN
         )
         if not implementations:
-            from .oauth import ParqetOAuth2Implementation
-
             config_entry_oauth2_flow.async_register_implementation(
                 self.hass,
                 DOMAIN,
