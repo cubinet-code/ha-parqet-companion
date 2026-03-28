@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 
+import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import aiohttp_client, config_entry_oauth2_flow
 
 from .api import ParqetApiClient
@@ -58,14 +60,34 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ParqetConfigEntry) -> bool:
     """Set up Parqet from a config entry."""
-    implementation = (
-        await config_entry_oauth2_flow.async_get_config_entry_implementation(
-            hass, entry
+    try:
+        implementation = (
+            await config_entry_oauth2_flow.async_get_config_entry_implementation(
+                hass, entry
+            )
         )
-    )
+    except ValueError as err:
+        raise ConfigEntryNotReady(
+            "OAuth2 implementation not available"
+        ) from err
+
     oauth_session = config_entry_oauth2_flow.OAuth2Session(
         hass, entry, implementation
     )
+
+    try:
+        await oauth_session.async_ensure_token_valid()
+    except config_entry_oauth2_flow.OAuth2TokenRequestReauthError as err:
+        raise ConfigEntryAuthFailed(
+            f"Token is no longer valid: {err}"
+        ) from err
+    except (
+        config_entry_oauth2_flow.OAuth2TokenRequestTransientError,
+        aiohttp.ClientError,
+    ) as err:
+        raise ConfigEntryNotReady(
+            f"Failed to refresh token: {err}"
+        ) from err
 
     session = aiohttp_client.async_get_clientsession(hass)
     api = ParqetApiClient(session, oauth_session=oauth_session)
