@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 import aiohttp
 
+from homeassistant.exceptions import ConfigEntryAuthFailed
+
 from .const import API_BASE_URL
 
 if TYPE_CHECKING:
@@ -58,18 +60,22 @@ class ParqetApiClient:
     async def _get(self, path: str) -> Any:
         """Make a GET request to the Parqet API."""
         url = f"{API_BASE_URL}{path}"
-        token = await self._get_access_token()
-        headers = {
-            "Authorization": f"Bearer {token}",
-        }
         try:
             async with asyncio.timeout(30):
+                token = await self._get_access_token()
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                }
                 async with self._session.get(url, headers=headers) as resp:
                     body = await resp.read()
                     return _handle_response(resp, body)
         except TimeoutError as err:
             raise ParqetConnectionError(
                 f"Timeout fetching {path}"
+            ) from err
+        except ConfigEntryAuthFailed as err:
+            raise ParqetAuthError(
+                f"Token refresh failed: {err}"
             ) from err
         except ParqetApiError:
             raise
@@ -81,13 +87,13 @@ class ParqetApiClient:
     async def _post(self, path: str, data: dict[str, Any]) -> Any:
         """Make a POST request to the Parqet API."""
         url = f"{API_BASE_URL}{path}"
-        token = await self._get_access_token()
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        }
         try:
             async with asyncio.timeout(30):
+                token = await self._get_access_token()
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                }
                 async with self._session.post(
                     url, headers=headers, json=data
                 ) as resp:
@@ -96,6 +102,10 @@ class ParqetApiClient:
         except TimeoutError as err:
             raise ParqetConnectionError(
                 f"Timeout posting {path}"
+            ) from err
+        except ConfigEntryAuthFailed as err:
+            raise ParqetAuthError(
+                f"Token refresh failed: {err}"
             ) from err
         except ParqetApiError:
             raise

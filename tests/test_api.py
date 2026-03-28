@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
+from homeassistant.exceptions import ConfigEntryAuthFailed
+
 from custom_components.parqet.api import (
     ParqetApiClient,
     ParqetApiError,
@@ -128,6 +130,32 @@ class TestParqetApiClient:
         await client.async_get_user()
 
         mock_oauth.async_ensure_token_valid.assert_called_once()
+
+    async def test_token_refresh_failure_raises_auth_error(self) -> None:
+        """Test that a failed token refresh raises ParqetAuthError."""
+        mock_oauth = AsyncMock()
+        mock_oauth.async_ensure_token_valid = AsyncMock(
+            side_effect=ConfigEntryAuthFailed("Refresh token expired")
+        )
+
+        mock_session = AsyncMock(spec=aiohttp.ClientSession)
+        client = ParqetApiClient(mock_session, oauth_session=mock_oauth)
+
+        with pytest.raises(ParqetAuthError, match="Token refresh failed"):
+            await client.async_get_user()
+
+    async def test_token_refresh_network_error_raises_connection_error(self) -> None:
+        """Test that a network error during token refresh raises ParqetConnectionError."""
+        mock_oauth = AsyncMock()
+        mock_oauth.async_ensure_token_valid = AsyncMock(
+            side_effect=aiohttp.ClientError("Connection refused")
+        )
+
+        mock_session = AsyncMock(spec=aiohttp.ClientSession)
+        client = ParqetApiClient(mock_session, oauth_session=mock_oauth)
+
+        with pytest.raises(ParqetConnectionError):
+            await client.async_get_user()
 
     async def test_activities_query_params(self, mock_session: AsyncMock) -> None:
         """Test that activities endpoint builds query params correctly."""
