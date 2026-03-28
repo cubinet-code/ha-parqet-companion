@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -227,8 +227,20 @@ async def init_integration(
         ),
         patch(
             "custom_components.parqet.config_entry_oauth2_flow.OAuth2Session",
+            return_value=AsyncMock(token={"access_token": "mock_token"}),
+        ),
+        patch(
+            "homeassistant.components.http.async_setup",
+            return_value=True,
+        ),
+        patch(
+            "custom_components.parqet.aiohttp_client.async_get_clientsession",
         ),
     ):
+        # Provide a mock HTTP server so the core calendar component's
+        # register_view() calls succeed without starting real threads.
+        hass.http = MagicMock()
+
         from homeassistant.setup import async_setup_component
 
         # Patch manifest dependencies at the JSON level before HA loads it,

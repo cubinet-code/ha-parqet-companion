@@ -13,15 +13,16 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import ParqetConfigEntry
-from .const import CONF_CURRENCY, CONF_PORTFOLIO_ID, CONF_PORTFOLIO_NAME, DOMAIN
+from .const import CONF_CURRENCY
 from .coordinator import ParqetDataUpdateCoordinator
+from .entity import ParqetEntity
 
 _LOGGER = logging.getLogger(__name__)
+
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -148,7 +149,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.valuation.atIntervalStart",
-        entity_registry_enabled_default=True,
+        entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
         key="unrealized_gain_net",
@@ -158,7 +159,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.unrealizedGains.inInterval.gainNet",
-        entity_registry_enabled_default=True,
+        entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
         key="unrealized_return_gross",
@@ -169,7 +170,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         suggested_display_precision=2,
         value_path="performance.unrealizedGains.inInterval.returnGross",
         is_percentage=True,
-        entity_registry_enabled_default=True,
+        entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
         key="unrealized_return_net",
@@ -180,7 +181,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         suggested_display_precision=2,
         value_path="performance.unrealizedGains.inInterval.returnNet",
         is_percentage=True,
-        entity_registry_enabled_default=True,
+        entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
         key="realized_gain_net",
@@ -190,7 +191,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.realizedGains.inInterval.gainNet",
-        entity_registry_enabled_default=True,
+        entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
         key="realized_return_gross",
@@ -201,7 +202,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         suggested_display_precision=2,
         value_path="performance.realizedGains.inInterval.returnGross",
         is_percentage=True,
-        entity_registry_enabled_default=True,
+        entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
         key="realized_return_net",
@@ -212,7 +213,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         suggested_display_precision=2,
         value_path="performance.realizedGains.inInterval.returnNet",
         is_percentage=True,
-        entity_registry_enabled_default=True,
+        entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
         key="dividends_net",
@@ -222,7 +223,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.dividends.inInterval.gainNet",
-        entity_registry_enabled_default=True,
+        entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
         key="dividends_taxes",
@@ -232,7 +233,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.dividends.inInterval.taxes",
-        entity_registry_enabled_default=True,
+        entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
         key="dividends_fees",
@@ -242,7 +243,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.dividends.inInterval.fees",
-        entity_registry_enabled_default=True,
+        entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
         key="holdings_count",
@@ -251,7 +252,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
         value_path="_holdings_count",
-        entity_registry_enabled_default=True,
+        entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
         key="net_allocation",
@@ -261,6 +262,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="netAllocations.net",
+        entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
         key="positive_allocation",
@@ -270,6 +272,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="netAllocations.positive.total",
+        entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
         key="negative_allocation",
@@ -279,6 +282,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="netAllocations.negative.total",
+        entity_registry_enabled_default=False,
     ),
 ]
 
@@ -299,11 +303,10 @@ async def async_setup_entry(
     )
 
 
-class ParqetSensor(CoordinatorEntity[ParqetDataUpdateCoordinator], SensorEntity):
+class ParqetSensor(ParqetEntity, SensorEntity):
     """A Parqet portfolio sensor."""
 
     entity_description: ParqetSensorEntityDescription
-    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -312,15 +315,13 @@ class ParqetSensor(CoordinatorEntity[ParqetDataUpdateCoordinator], SensorEntity)
         description: ParqetSensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, entry)
         self.entity_description = description
 
-        portfolio_id = entry.data[CONF_PORTFOLIO_ID]
         currency = entry.data.get(CONF_CURRENCY, "EUR")
 
         self._entry_id = entry.entry_id
-        self._portfolio_id = portfolio_id
-        self._attr_unique_id = f"{portfolio_id}_{description.key}"
+        self._attr_unique_id = f"{self._portfolio_id}_{description.key}"
         self._attr_entity_registry_enabled_default = (
             description.entity_registry_enabled_default
         )
@@ -328,13 +329,6 @@ class ParqetSensor(CoordinatorEntity[ParqetDataUpdateCoordinator], SensorEntity)
         # Set dynamic currency for monetary sensors.
         if description.device_class == SensorDeviceClass.MONETARY:
             self._attr_native_unit_of_measurement = currency
-
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, portfolio_id)},
-            name=entry.data.get(CONF_PORTFOLIO_NAME, "Parqet Portfolio"),
-            manufacturer="Parqet",
-            entry_type=DeviceEntryType.SERVICE,
-        )
 
     @property
     def native_value(self) -> float | None:

@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlencode
 
 import aiohttp
 
@@ -144,7 +145,7 @@ class ParqetApiClient:
         portfolio_id: str,
         *,
         activity_type: list[str] | None = None,
-        limit: int = 25,
+        limit: int = 25,  # API default is 100; lower for card UI responsiveness
         cursor: str | None = None,
     ) -> dict[str, Any]:
         """GET /portfolios/{id}/activities — fetch transaction history."""
@@ -156,15 +157,7 @@ class ParqetApiClient:
         if cursor:
             params["cursor"] = cursor
 
-        # Build query string manually for repeated params.
-        parts = []
-        for key, value in params.items():
-            if isinstance(value, list):
-                for v in value:
-                    parts.append(f"{key}={v}")
-            else:
-                parts.append(f"{key}={value}")
-        qs = "&".join(parts)
+        qs = urlencode(params, doseq=True)
         path = f"/portfolios/{portfolio_id}/activities"
         if qs:
             path = f"{path}?{qs}"
@@ -174,9 +167,13 @@ class ParqetApiClient:
 
 def _handle_response(resp: aiohttp.ClientResponse, body: bytes) -> Any:
     """Check response status and return parsed JSON."""
-    if resp.status in (401, 403):
+    if resp.status == 401:
         raise ParqetAuthError(
             f"Authentication failed ({resp.status})"
+        )
+    if resp.status == 403:
+        raise ParqetApiError(
+            f"Insufficient permissions ({resp.status})"
         )
     if resp.status >= 500:
         raise ParqetConnectionError(

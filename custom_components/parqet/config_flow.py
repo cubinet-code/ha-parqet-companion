@@ -22,7 +22,12 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
 )
 
-from .api import ParqetApiClient, ParqetApiError
+from .api import (
+    ParqetApiClient,
+    ParqetApiError,
+    ParqetAuthError,
+    ParqetConnectionError,
+)
 from .const import (
     AUTHORIZE_URL,
     CLIENT_ID,
@@ -122,9 +127,14 @@ class ParqetOAuth2FlowHandler(
         try:
             user_info = await api.async_get_user()
             portfolios = await api.async_list_portfolios()
+        except ParqetAuthError:
+            return self.async_abort(reason="invalid_auth")
+        except ParqetConnectionError:
+            _LOGGER.exception("Connection error fetching Parqet data during setup")
+            return self.async_abort(reason="cannot_connect")
         except ParqetApiError:
             _LOGGER.exception("Failed to fetch Parqet data during setup")
-            return self.async_abort(reason="cannot_connect")
+            return self.async_abort(reason="unknown")
 
         self._user_id = user_info.get("userId")
 

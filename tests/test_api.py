@@ -75,14 +75,14 @@ class TestParqetApiClient:
         with pytest.raises(ParqetAuthError):
             await client.async_get_user()
 
-    async def test_auth_error_on_403(self, mock_session: AsyncMock) -> None:
-        """Test that 403 raises ParqetAuthError."""
+    async def test_permission_error_on_403(self, mock_session: AsyncMock) -> None:
+        """Test that 403 raises ParqetApiError (not auth — reauth won't help)."""
         resp = _make_response(403, b"Forbidden")
         mock_session.get.return_value.__aenter__.return_value = resp
 
         client = ParqetApiClient(mock_session, "bad_token")
 
-        with pytest.raises(ParqetAuthError):
+        with pytest.raises(ParqetApiError, match="Insufficient permissions"):
             await client.async_get_user()
 
     async def test_server_error_on_500(self, mock_session: AsyncMock) -> None:

@@ -3,21 +3,22 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from . import ParqetConfigEntry
 from .api import ParqetApiError
-from .const import CONF_PORTFOLIO_ID, CONF_PORTFOLIO_NAME, DOMAIN
 from .coordinator import ParqetDataUpdateCoordinator
+from .entity import ParqetEntity
 
 _LOGGER = logging.getLogger(__name__)
+
+PARALLEL_UPDATES = 0
 
 ACTIVITY_LABELS: dict[str, str] = {
     "buy": "Buy",
@@ -123,12 +124,9 @@ def _activity_to_event(
     )
 
 
-class ParqetActivityCalendar(
-    CoordinatorEntity[ParqetDataUpdateCoordinator], CalendarEntity
-):
+class ParqetActivityCalendar(ParqetEntity, CalendarEntity):
     """Calendar entity that exposes Parqet portfolio activities as events."""
 
-    _attr_has_entity_name = True
     _attr_translation_key = "activities"
 
     def __init__(
@@ -137,17 +135,8 @@ class ParqetActivityCalendar(
         entry: ParqetConfigEntry,
     ) -> None:
         """Initialize the calendar entity."""
-        super().__init__(coordinator)
-
-        portfolio_id = entry.data[CONF_PORTFOLIO_ID]
-        self._attr_unique_id = f"{portfolio_id}_activities"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, portfolio_id)},
-            name=entry.data.get(CONF_PORTFOLIO_NAME, "Parqet Portfolio"),
-            manufacturer="Parqet",
-            entry_type=DeviceEntryType.SERVICE,
-        )
-        self._portfolio_id = portfolio_id
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{self._portfolio_id}_activities"
         self._cached_events: list[CalendarEvent] = []
 
     @property
@@ -156,7 +145,7 @@ class ParqetActivityCalendar(
         if not self._cached_events:
             return None
 
-        today = date.today()
+        today = dt_util.now().date()
         # Find the next upcoming event (on or after today).
         for evt in self._cached_events:
             if evt.start >= today:
