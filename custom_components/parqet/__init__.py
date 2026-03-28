@@ -25,6 +25,7 @@ from .const import (
 )
 from .coordinator import ParqetDataUpdateCoordinator
 from .frontend import async_register_frontend
+from .oauth import ParqetOAuth2Implementation
 from .websocket_api import async_register_websocket_api
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,13 +40,12 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     config_entry_oauth2_flow.async_register_implementation(
         hass,
         DOMAIN,
-        config_entry_oauth2_flow.LocalOAuth2ImplementationWithPkce(
+        ParqetOAuth2Implementation(
             hass,
             DOMAIN,
             CLIENT_ID,
             authorize_url=AUTHORIZE_URL,
             token_url=TOKEN_URL,
-            client_secret="",
         ),
     )
 

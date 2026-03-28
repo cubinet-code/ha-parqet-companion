@@ -99,16 +99,17 @@ class ParqetOAuth2FlowHandler(
             self.hass, DOMAIN
         )
         if not implementations:
+            from .oauth import ParqetOAuth2Implementation
+
             config_entry_oauth2_flow.async_register_implementation(
                 self.hass,
                 DOMAIN,
-                config_entry_oauth2_flow.LocalOAuth2ImplementationWithPkce(
+                ParqetOAuth2Implementation(
                     self.hass,
                     DOMAIN,
                     CLIENT_ID,
                     authorize_url=AUTHORIZE_URL,
                     token_url=TOKEN_URL,
-                    client_secret="",
                 ),
             )
 
