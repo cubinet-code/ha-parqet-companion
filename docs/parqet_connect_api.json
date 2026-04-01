@@ -397,6 +397,150 @@
         "summary": ""
       }
     },
+    "/portfolios/{portfolioId}/holdings/real-estate": {
+      "post": {
+        "description": "Create a new real estate holding for the user. \n\nOnce you have created a real estate holding, you can create activities by using the create activities endpoint.",
+        "operationId": "portfolios_holdings_create_real_estate",
+        "parameters": [
+          {
+            "name": "portfolioId",
+            "required": true,
+            "in": "path",
+            "description": "Id of the parqet portfolio",
+            "schema": {
+              "example": "68dbc0b6cf3c111e1be1d411",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RealEstateHoldingCreationBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldingCreationResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "connect": [
+              "portfolio:write"
+            ]
+          }
+        ],
+        "summary": ""
+      }
+    },
+    "/portfolios/{portfolioId}/holdings/cash": {
+      "post": {
+        "description": "Create a new cash holding for the user. \n\nOnce you have created a cash holding, you can create activities by using the create activities endpoint.",
+        "operationId": "portfolios_holdings_create_cash",
+        "parameters": [
+          {
+            "name": "portfolioId",
+            "required": true,
+            "in": "path",
+            "description": "Id of the parqet portfolio",
+            "schema": {
+              "example": "68dbc0b6cf3c111e1be1d411",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashHoldingCreationBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldingCreationResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "connect": [
+              "portfolio:write"
+            ]
+          }
+        ],
+        "summary": ""
+      }
+    },
+    "/portfolios/{portfolioId}/holdings/commodity": {
+      "post": {
+        "description": "Create a new commodity holding for the user. \n\nOnce you have created a commodity holding, you can create activities by using the create activities endpoint.",
+        "operationId": "portfolios_holdings_create_commodity",
+        "parameters": [
+          {
+            "name": "portfolioId",
+            "required": true,
+            "in": "path",
+            "description": "Id of the parqet portfolio",
+            "schema": {
+              "example": "68dbc0b6cf3c111e1be1d411",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommodityHoldingCreationBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldingCreationResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "connect": [
+              "portfolio:write"
+            ]
+          }
+        ],
+        "summary": ""
+      }
+    },
     "/performance": {
       "post": {
         "description": "This endpoint is used to fetch performance data from the specified portfolios.",
@@ -888,6 +1032,543 @@
                   ],
                   "description": "Select this type for any crypto related activity",
                   "title": "Crypto Activity"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
+                    },
+                    "tax": {
+                      "example": 0,
+                      "type": "number"
+                    },
+                    "fee": {
+                      "example": 0,
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "ARS",
+                        "AUD",
+                        "BRL",
+                        "BWP",
+                        "CAD",
+                        "CHF",
+                        "CLP",
+                        "CNY",
+                        "CZK",
+                        "DKK",
+                        "EUR",
+                        "GBP",
+                        "GBX",
+                        "GEL",
+                        "HKD",
+                        "HUF",
+                        "IDR",
+                        "ILS",
+                        "INR",
+                        "ISK",
+                        "JPY",
+                        "KRW",
+                        "KZT",
+                        "MAD",
+                        "MXN",
+                        "MYR",
+                        "NOK",
+                        "NZD",
+                        "PEN",
+                        "PHP",
+                        "PLN",
+                        "RMB",
+                        "RUB",
+                        "SAR",
+                        "SEK",
+                        "SGD",
+                        "THB",
+                        "TRY",
+                        "TWD",
+                        "USD",
+                        "USDC",
+                        "VND",
+                        "ZAR",
+                        "ZMW"
+                      ],
+                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                    },
+                    "datetime": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                      "example": "2025-11-17T09:33:39.892Z"
+                    },
+                    "description": {
+                      "example": "Optional description that is visible to the user",
+                      "type": "string"
+                    },
+                    "broker": {
+                      "example": "bitpanda",
+                      "type": "string",
+                      "enum": [
+                        "1822direkt",
+                        "bison",
+                        "bitpanda",
+                        "bsdex",
+                        "bondora",
+                        "baader_bank",
+                        "cap_trader",
+                        "coinbase",
+                        "coinbase_pro",
+                        "comdirect",
+                        "consors_bank",
+                        "cortal_consors",
+                        "commerzbank",
+                        "crypto_com",
+                        "dadat",
+                        "deutsche_bank",
+                        "degiro",
+                        "dkb",
+                        "ebase",
+                        "erste_bank",
+                        "extra_etf",
+                        "ffb",
+                        "finanzen_zero",
+                        "finvesto",
+                        "flatex",
+                        "fondsdepot_bank",
+                        "generic_csv",
+                        "gratisbroker",
+                        "hypo_vereinsbank",
+                        "ing",
+                        "interactive_brokers",
+                        "just_trade",
+                        "kraken",
+                        "lgt_bank",
+                        "onvista",
+                        "oskar",
+                        "peaks",
+                        "portfolio_performance",
+                        "postbank",
+                        "quirion",
+                        "s_broker",
+                        "scalable_capital",
+                        "smartbroker",
+                        "spk_vb",
+                        "smavesto",
+                        "smartbroker_plus",
+                        "sunrise",
+                        "sutorbank",
+                        "swissquote",
+                        "targobank",
+                        "tomorrow",
+                        "trade_republic",
+                        "traders_place",
+                        "union_investment",
+                        "vanguard",
+                        "v_bank",
+                        "volksbank",
+                        "yuh"
+                      ]
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "buy",
+                        "sell",
+                        "dividend",
+                        "interest",
+                        "transfer_in",
+                        "transfer_out",
+                        "fees_taxes",
+                        "deposit",
+                        "withdrawal"
+                      ],
+                      "example": "buy"
+                    },
+                    "assetIdentifierType": {
+                      "type": "string",
+                      "const": "cash"
+                    },
+                    "holding_id": {
+                      "type": "string",
+                      "example": "hld_698264d2cb0f0369b3892235"
+                    }
+                  },
+                  "required": [
+                    "shares",
+                    "price",
+                    "currency",
+                    "datetime",
+                    "type",
+                    "assetIdentifierType",
+                    "holding_id"
+                  ],
+                  "description": "Select this type for activities related to cash holdings",
+                  "title": "Cash Activity"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
+                    },
+                    "tax": {
+                      "example": 0,
+                      "type": "number"
+                    },
+                    "fee": {
+                      "example": 0,
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "ARS",
+                        "AUD",
+                        "BRL",
+                        "BWP",
+                        "CAD",
+                        "CHF",
+                        "CLP",
+                        "CNY",
+                        "CZK",
+                        "DKK",
+                        "EUR",
+                        "GBP",
+                        "GBX",
+                        "GEL",
+                        "HKD",
+                        "HUF",
+                        "IDR",
+                        "ILS",
+                        "INR",
+                        "ISK",
+                        "JPY",
+                        "KRW",
+                        "KZT",
+                        "MAD",
+                        "MXN",
+                        "MYR",
+                        "NOK",
+                        "NZD",
+                        "PEN",
+                        "PHP",
+                        "PLN",
+                        "RMB",
+                        "RUB",
+                        "SAR",
+                        "SEK",
+                        "SGD",
+                        "THB",
+                        "TRY",
+                        "TWD",
+                        "USD",
+                        "USDC",
+                        "VND",
+                        "ZAR",
+                        "ZMW"
+                      ],
+                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                    },
+                    "datetime": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                      "example": "2025-11-17T09:33:39.892Z"
+                    },
+                    "description": {
+                      "example": "Optional description that is visible to the user",
+                      "type": "string"
+                    },
+                    "broker": {
+                      "example": "bitpanda",
+                      "type": "string",
+                      "enum": [
+                        "1822direkt",
+                        "bison",
+                        "bitpanda",
+                        "bsdex",
+                        "bondora",
+                        "baader_bank",
+                        "cap_trader",
+                        "coinbase",
+                        "coinbase_pro",
+                        "comdirect",
+                        "consors_bank",
+                        "cortal_consors",
+                        "commerzbank",
+                        "crypto_com",
+                        "dadat",
+                        "deutsche_bank",
+                        "degiro",
+                        "dkb",
+                        "ebase",
+                        "erste_bank",
+                        "extra_etf",
+                        "ffb",
+                        "finanzen_zero",
+                        "finvesto",
+                        "flatex",
+                        "fondsdepot_bank",
+                        "generic_csv",
+                        "gratisbroker",
+                        "hypo_vereinsbank",
+                        "ing",
+                        "interactive_brokers",
+                        "just_trade",
+                        "kraken",
+                        "lgt_bank",
+                        "onvista",
+                        "oskar",
+                        "peaks",
+                        "portfolio_performance",
+                        "postbank",
+                        "quirion",
+                        "s_broker",
+                        "scalable_capital",
+                        "smartbroker",
+                        "spk_vb",
+                        "smavesto",
+                        "smartbroker_plus",
+                        "sunrise",
+                        "sutorbank",
+                        "swissquote",
+                        "targobank",
+                        "tomorrow",
+                        "trade_republic",
+                        "traders_place",
+                        "union_investment",
+                        "vanguard",
+                        "v_bank",
+                        "volksbank",
+                        "yuh"
+                      ]
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "buy",
+                        "sell",
+                        "dividend",
+                        "interest",
+                        "transfer_in",
+                        "transfer_out",
+                        "fees_taxes",
+                        "deposit",
+                        "withdrawal"
+                      ],
+                      "example": "buy"
+                    },
+                    "assetIdentifierType": {
+                      "type": "string",
+                      "const": "commodity"
+                    },
+                    "holding_id": {
+                      "type": "string",
+                      "example": "hld_698264d2cb0f0369b3892235"
+                    }
+                  },
+                  "required": [
+                    "shares",
+                    "price",
+                    "currency",
+                    "datetime",
+                    "type",
+                    "assetIdentifierType",
+                    "holding_id"
+                  ],
+                  "description": "Select this type for activities related to commodity holdings",
+                  "title": "Commodity Activity"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
+                    },
+                    "tax": {
+                      "example": 0,
+                      "type": "number"
+                    },
+                    "fee": {
+                      "example": 0,
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "ARS",
+                        "AUD",
+                        "BRL",
+                        "BWP",
+                        "CAD",
+                        "CHF",
+                        "CLP",
+                        "CNY",
+                        "CZK",
+                        "DKK",
+                        "EUR",
+                        "GBP",
+                        "GBX",
+                        "GEL",
+                        "HKD",
+                        "HUF",
+                        "IDR",
+                        "ILS",
+                        "INR",
+                        "ISK",
+                        "JPY",
+                        "KRW",
+                        "KZT",
+                        "MAD",
+                        "MXN",
+                        "MYR",
+                        "NOK",
+                        "NZD",
+                        "PEN",
+                        "PHP",
+                        "PLN",
+                        "RMB",
+                        "RUB",
+                        "SAR",
+                        "SEK",
+                        "SGD",
+                        "THB",
+                        "TRY",
+                        "TWD",
+                        "USD",
+                        "USDC",
+                        "VND",
+                        "ZAR",
+                        "ZMW"
+                      ],
+                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                    },
+                    "datetime": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                      "example": "2025-11-17T09:33:39.892Z"
+                    },
+                    "description": {
+                      "example": "Optional description that is visible to the user",
+                      "type": "string"
+                    },
+                    "broker": {
+                      "example": "bitpanda",
+                      "type": "string",
+                      "enum": [
+                        "1822direkt",
+                        "bison",
+                        "bitpanda",
+                        "bsdex",
+                        "bondora",
+                        "baader_bank",
+                        "cap_trader",
+                        "coinbase",
+                        "coinbase_pro",
+                        "comdirect",
+                        "consors_bank",
+                        "cortal_consors",
+                        "commerzbank",
+                        "crypto_com",
+                        "dadat",
+                        "deutsche_bank",
+                        "degiro",
+                        "dkb",
+                        "ebase",
+                        "erste_bank",
+                        "extra_etf",
+                        "ffb",
+                        "finanzen_zero",
+                        "finvesto",
+                        "flatex",
+                        "fondsdepot_bank",
+                        "generic_csv",
+                        "gratisbroker",
+                        "hypo_vereinsbank",
+                        "ing",
+                        "interactive_brokers",
+                        "just_trade",
+                        "kraken",
+                        "lgt_bank",
+                        "onvista",
+                        "oskar",
+                        "peaks",
+                        "portfolio_performance",
+                        "postbank",
+                        "quirion",
+                        "s_broker",
+                        "scalable_capital",
+                        "smartbroker",
+                        "spk_vb",
+                        "smavesto",
+                        "smartbroker_plus",
+                        "sunrise",
+                        "sutorbank",
+                        "swissquote",
+                        "targobank",
+                        "tomorrow",
+                        "trade_republic",
+                        "traders_place",
+                        "union_investment",
+                        "vanguard",
+                        "v_bank",
+                        "volksbank",
+                        "yuh"
+                      ]
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "buy",
+                        "sell",
+                        "dividend",
+                        "interest",
+                        "transfer_in",
+                        "transfer_out",
+                        "fees_taxes",
+                        "deposit",
+                        "withdrawal"
+                      ],
+                      "example": "buy"
+                    },
+                    "assetIdentifierType": {
+                      "type": "string",
+                      "const": "real_estate"
+                    },
+                    "holding_id": {
+                      "type": "string",
+                      "example": "hld_698264d2cb0f0369b3892235"
+                    }
+                  },
+                  "required": [
+                    "shares",
+                    "price",
+                    "currency",
+                    "datetime",
+                    "type",
+                    "assetIdentifierType",
+                    "holding_id"
+                  ],
+                  "description": "Select this type for activities related to real estate holdings",
+                  "title": "Real Estate Activity"
                 },
                 {
                   "type": "object",
@@ -4197,6 +4878,156 @@
         "type": "object",
         "properties": {},
         "additionalProperties": false
+      },
+      "RealEstateHoldingCreationBodyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "imageData": {
+            "type": "string",
+            "format": "base64",
+            "contentEncoding": "base64",
+            "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+            "description": "Base64 encoded PNG image data (256x256, max 512KiB)"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "CashHoldingCreationBodyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "currency": {
+            "default": "EUR",
+            "type": "string",
+            "enum": [
+              "ARS",
+              "AUD",
+              "BRL",
+              "BWP",
+              "CAD",
+              "CHF",
+              "CLP",
+              "CNY",
+              "CZK",
+              "DKK",
+              "EUR",
+              "GBP",
+              "GBX",
+              "GEL",
+              "HKD",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "ISK",
+              "JPY",
+              "KRW",
+              "KZT",
+              "MAD",
+              "MXN",
+              "MYR",
+              "NOK",
+              "NZD",
+              "PEN",
+              "PHP",
+              "PLN",
+              "RMB",
+              "RUB",
+              "SAR",
+              "SEK",
+              "SGD",
+              "THB",
+              "TRY",
+              "TWD",
+              "USD",
+              "USDC",
+              "VND",
+              "ZAR",
+              "ZMW"
+            ]
+          },
+          "referenceAccountFor": {
+            "default": [],
+            "description": "Defines the asset classes for which this cash holding acts as a reference account.\n\nFor activities in the selected classes, Parqet creates automatic counter-bookings:\nbuy activities are debited from this account, while sell activities and dividends are credited.\n\nIf no value is provided, the cash holding is independent and not used as a reference account.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "cash",
+                "security",
+                "crypto",
+                "commodity",
+                "custom",
+                "real_estate"
+              ]
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "CommodityHoldingCreationBodyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "definition": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "type": "number",
+                "minimum": 0.00001
+              },
+              "purity": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "oz.tr.",
+                  "g"
+                ]
+              }
+            },
+            "required": [
+              "amount",
+              "purity",
+              "unit"
+            ]
+          },
+          "identifier": {
+            "type": "string",
+            "enum": [
+              "gold",
+              "silver",
+              "platinum",
+              "palladium"
+            ],
+            "description": "Type of the commodity"
+          }
+        },
+        "required": [
+          "name",
+          "definition",
+          "identifier"
+        ]
       },
       "PortfolioPerformanceBodyDto": {
         "type": "object",
