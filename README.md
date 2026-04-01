@@ -26,6 +26,8 @@ A Home Assistant integration for [Parqet](https://www.parqet.com) — the portfo
 - **On-demand data** — switch intervals and fetch fresh data via WebSocket API
 - **Diagnostics** — downloadable debug data with automatic token redaction
 
+> **Note:** The initial setup must be completed on a **desktop browser**. Mobile authorisation is not supported yet due to an API limitation in the OAuth redirect flow.
+
 ## Prerequisites
 
 - **Home Assistant** 2024.8 or newer

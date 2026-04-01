@@ -17,7 +17,7 @@ SCOPES = "portfolio:read"
 
 # Polling (minutes)
 DEFAULT_SCAN_INTERVAL = timedelta(minutes=15)
-DEFAULT_SCAN_INTERVAL_MIN = 15
+DEFAULT_SCAN_INTERVAL_MIN = int(DEFAULT_SCAN_INTERVAL.total_seconds() // 60)
 MIN_SCAN_INTERVAL_MIN = 5
 
 # Performance interval options

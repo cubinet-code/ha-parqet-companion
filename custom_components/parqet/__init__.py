@@ -13,19 +13,16 @@ from homeassistant.helpers import aiohttp_client, config_entry_oauth2_flow
 
 from .api import ParqetApiClient
 from .const import (
-    AUTHORIZE_URL,
-    CLIENT_ID,
     CONF_INTERVAL,
     CONF_PORTFOLIO_ID,
     CONF_PORTFOLIO_NAME,
     CONF_SCAN_INTERVAL,
     DEFAULT_INTERVAL,
     DOMAIN,
-    TOKEN_URL,
 )
 from .coordinator import ParqetDataUpdateCoordinator
 from .frontend import async_register_frontend
-from .oauth import ParqetOAuth2Implementation
+from .oauth import create_parqet_oauth_implementation
 from .websocket_api import async_register_websocket_api
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,13 +37,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     config_entry_oauth2_flow.async_register_implementation(
         hass,
         DOMAIN,
-        ParqetOAuth2Implementation(
-            hass,
-            DOMAIN,
-            CLIENT_ID,
-            authorize_url=AUTHORIZE_URL,
-            token_url=TOKEN_URL,
-        ),
+        create_parqet_oauth_implementation(hass),
     )
 
     # Register the frontend card static path + Lovelace resource.

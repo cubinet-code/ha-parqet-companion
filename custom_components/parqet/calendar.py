@@ -106,11 +106,9 @@ def _activity_to_event(
         lines.append(f"Broker: {broker}")
     description = "\n".join(lines)
 
-    # Parse activity datetime.
     dt_str = activity.get("datetime", "")
-    try:
-        dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-    except (ValueError, AttributeError):
+    dt = dt_util.parse_datetime(dt_str) if dt_str else None
+    if dt is None:
         dt = datetime.now(tz=UTC)
 
     # Calendar all-day events: end date is exclusive per iCalendar spec.
@@ -187,9 +185,8 @@ class ParqetActivityCalendar(ParqetEntity, CalendarEntity):
 
         for activity in activities:
             dt_str = activity.get("datetime", "")
-            try:
-                dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
+            dt = dt_util.parse_datetime(dt_str) if dt_str else None
+            if dt is None:
                 continue
 
             # Filter to requested date range (start inclusive, end exclusive).

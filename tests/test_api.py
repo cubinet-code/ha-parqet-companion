@@ -37,7 +37,7 @@ class TestParqetApiClient:
     async def test_get_user(self, mock_session: AsyncMock) -> None:
         """Test fetching user info."""
         resp = _make_response(200, b'{"userId": "abc", "state": "active"}')
-        mock_session.get.return_value.__aenter__.return_value = resp
+        mock_session.request.return_value.__aenter__.return_value = resp
 
         client = ParqetApiClient(mock_session, "test_token")
         result = await client.async_get_user()
@@ -47,7 +47,7 @@ class TestParqetApiClient:
     async def test_list_portfolios(self, mock_session: AsyncMock) -> None:
         """Test listing portfolios."""
         resp = _make_response(200, b'{"items": [{"id": "p1", "name": "Test"}]}')
-        mock_session.get.return_value.__aenter__.return_value = resp
+        mock_session.request.return_value.__aenter__.return_value = resp
 
         client = ParqetApiClient(mock_session, "test_token")
         result = await client.async_list_portfolios()
@@ -58,7 +58,7 @@ class TestParqetApiClient:
     async def test_get_performance(self, mock_session: AsyncMock) -> None:
         """Test fetching performance data."""
         resp = _make_response(200, b'{"performance": {}, "holdings": []}')
-        mock_session.post.return_value.__aenter__.return_value = resp
+        mock_session.request.return_value.__aenter__.return_value = resp
 
         client = ParqetApiClient(mock_session, "test_token")
         result = await client.async_get_performance(["p1"], "max")
@@ -68,7 +68,7 @@ class TestParqetApiClient:
     async def test_auth_error_on_401(self, mock_session: AsyncMock) -> None:
         """Test that 401 raises ParqetAuthError."""
         resp = _make_response(401, b"Unauthorized")
-        mock_session.get.return_value.__aenter__.return_value = resp
+        mock_session.request.return_value.__aenter__.return_value = resp
 
         client = ParqetApiClient(mock_session, "bad_token")
 
@@ -78,7 +78,7 @@ class TestParqetApiClient:
     async def test_permission_error_on_403(self, mock_session: AsyncMock) -> None:
         """Test that 403 raises ParqetApiError (not auth — reauth won't help)."""
         resp = _make_response(403, b"Forbidden")
-        mock_session.get.return_value.__aenter__.return_value = resp
+        mock_session.request.return_value.__aenter__.return_value = resp
 
         client = ParqetApiClient(mock_session, "bad_token")
 
@@ -88,7 +88,7 @@ class TestParqetApiClient:
     async def test_server_error_on_500(self, mock_session: AsyncMock) -> None:
         """Test that 500 raises ParqetConnectionError."""
         resp = _make_response(500, b"Internal Server Error")
-        mock_session.get.return_value.__aenter__.return_value = resp
+        mock_session.request.return_value.__aenter__.return_value = resp
 
         client = ParqetApiClient(mock_session, "token")
 
@@ -99,7 +99,7 @@ class TestParqetApiClient:
         self, mock_session: AsyncMock
     ) -> None:
         """Test that aiohttp client errors raise ParqetConnectionError."""
-        mock_session.get.side_effect = aiohttp.ClientError("Connection failed")
+        mock_session.request.side_effect = aiohttp.ClientError("Connection failed")
 
         client = ParqetApiClient(mock_session, "token")
 
@@ -109,7 +109,7 @@ class TestParqetApiClient:
     async def test_api_error_on_400(self, mock_session: AsyncMock) -> None:
         """Test that 400 raises ParqetApiError."""
         resp = _make_response(400, b'{"error": "bad request"}')
-        mock_session.post.return_value.__aenter__.return_value = resp
+        mock_session.request.return_value.__aenter__.return_value = resp
 
         client = ParqetApiClient(mock_session, "token")
 
@@ -124,7 +124,7 @@ class TestParqetApiClient:
 
         mock_session = AsyncMock(spec=aiohttp.ClientSession)
         resp = _make_response(200, b'{"userId": "abc"}')
-        mock_session.get.return_value.__aenter__.return_value = resp
+        mock_session.request.return_value.__aenter__.return_value = resp
 
         client = ParqetApiClient(mock_session, oauth_session=mock_oauth)
         await client.async_get_user()
@@ -160,16 +160,15 @@ class TestParqetApiClient:
     async def test_activities_query_params(self, mock_session: AsyncMock) -> None:
         """Test that activities endpoint builds query params correctly."""
         resp = _make_response(200, b'{"activities": [], "cursor": null}')
-        mock_session.get.return_value.__aenter__.return_value = resp
+        mock_session.request.return_value.__aenter__.return_value = resp
 
         client = ParqetApiClient(mock_session, "token")
         await client.async_get_activities(
             "p1", activity_type=["buy", "sell"], limit=50, cursor="abc123"
         )
 
-        call_args = mock_session.get.call_args
-        url = call_args[0][0]
-        assert "activityType=buy" in url
-        assert "activityType=sell" in url
-        assert "limit=50" in url
-        assert "cursor=abc123" in url
+        call_args = mock_session.request.call_args
+        params = call_args[1]["params"]
+        assert params["activityType"] == ["buy", "sell"]
+        assert params["limit"] == "50"
+        assert params["cursor"] == "abc123"

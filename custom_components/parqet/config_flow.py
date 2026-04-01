@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Mapping
 from typing import Any
@@ -29,8 +30,6 @@ from .api import (
     ParqetConnectionError,
 )
 from .const import (
-    AUTHORIZE_URL,
-    CLIENT_ID,
     CONF_CURRENCY,
     CONF_INTERVAL,
     CONF_PORTFOLIO_ID,
@@ -42,9 +41,8 @@ from .const import (
     INTERVALS,
     MIN_SCAN_INTERVAL_MIN,
     SCOPES,
-    TOKEN_URL,
 )
-from .oauth import ParqetOAuth2Implementation
+from .oauth import create_parqet_oauth_implementation
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -103,13 +101,7 @@ class ParqetOAuth2FlowHandler(
             config_entry_oauth2_flow.async_register_implementation(
                 self.hass,
                 DOMAIN,
-                ParqetOAuth2Implementation(
-                    self.hass,
-                    DOMAIN,
-                    CLIENT_ID,
-                    authorize_url=AUTHORIZE_URL,
-                    token_url=TOKEN_URL,
-                ),
+                create_parqet_oauth_implementation(self.hass),
             )
 
     async def async_oauth_create_entry(self, data: dict) -> ConfigFlowResult:
@@ -125,8 +117,10 @@ class ParqetOAuth2FlowHandler(
         api = ParqetApiClient(session, access_token)
 
         try:
-            user_info = await api.async_get_user()
-            portfolios = await api.async_list_portfolios()
+            user_info, portfolios = await asyncio.gather(
+                api.async_get_user(),
+                api.async_list_portfolios(),
+            )
         except ParqetAuthError:
             return self.async_abort(reason="invalid_auth")
         except ParqetConnectionError:

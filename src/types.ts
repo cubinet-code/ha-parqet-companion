@@ -10,8 +10,22 @@ export interface HassEntity {
   last_updated: string;
 }
 
+export interface HassDeviceRegistryEntry {
+  id: string;
+  name: string | null;
+  identifiers: [string, string][];
+}
+
+export interface HassEntityRegistryDisplayEntry {
+  entity_id: string;
+  device_id?: string;
+  platform: string;
+}
+
 export interface Hass {
   states: Record<string, HassEntity>;
+  devices?: Record<string, HassDeviceRegistryEntry>;
+  entities?: Record<string, HassEntityRegistryDisplayEntry>;
   connection: {
     sendMessagePromise(msg: Record<string, unknown>): Promise<unknown>;
   };
@@ -112,7 +126,8 @@ export type ViewType = 'performance' | 'holdings' | 'activities';
 
 export interface ParqetCardConfig {
   type: string;
-  entity?: string;
+  device_id?: string;
+  entity?: string; // legacy — kept for backward compat
   entry_id?: string;
   default_view?: ViewType;
   default_interval?: IntervalValue;

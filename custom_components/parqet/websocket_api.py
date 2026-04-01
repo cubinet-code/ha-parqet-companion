@@ -9,8 +9,21 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
 from .api import ParqetApiError
-from .const import DOMAIN
+from .const import DEFAULT_INTERVAL, DOMAIN
 from .coordinator import ParqetDataUpdateCoordinator
+
+
+def _get_coordinator(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> ParqetDataUpdateCoordinator | None:
+    """Validate config entry and return its coordinator, or send error."""
+    entry = hass.config_entries.async_get_entry(msg["entry_id"])
+    if entry is None or entry.domain != DOMAIN:
+        connection.send_error(msg["id"], "invalid_entry", "Invalid config entry")
+        return None
+    return entry.runtime_data
 
 
 def async_register_websocket_api(hass: HomeAssistant) -> None:
@@ -34,14 +47,10 @@ def ws_get_holdings(
     msg: dict[str, Any],
 ) -> None:
     """Return holdings from coordinator cached data."""
-    entry_id = msg["entry_id"]
-    entry = hass.config_entries.async_get_entry(entry_id)
-
-    if entry is None or entry.domain != DOMAIN:
-        connection.send_error(msg["id"], "invalid_entry", "Invalid config entry")
+    coordinator = _get_coordinator(hass, connection, msg)
+    if coordinator is None:
         return
 
-    coordinator: ParqetDataUpdateCoordinator = entry.runtime_data
     holdings = (coordinator.data or {}).get("holdings", [])
 
     connection.send_result(msg["id"], {"holdings": holdings})
@@ -66,14 +75,9 @@ async def ws_get_activities(
     msg: dict[str, Any],
 ) -> None:
     """Fetch activities on demand from the Parqet API."""
-    entry_id = msg["entry_id"]
-    entry = hass.config_entries.async_get_entry(entry_id)
-
-    if entry is None or entry.domain != DOMAIN:
-        connection.send_error(msg["id"], "invalid_entry", "Invalid config entry")
+    coordinator = _get_coordinator(hass, connection, msg)
+    if coordinator is None:
         return
-
-    coordinator: ParqetDataUpdateCoordinator = entry.runtime_data
 
     try:
         data = await coordinator.api.async_get_activities(
@@ -94,7 +98,7 @@ async def ws_get_activities(
     {
         vol.Required("type"): "parqet/get_performance",
         vol.Required("entry_id"): str,
-        vol.Optional("interval", default="max"): str,
+        vol.Optional("interval", default=DEFAULT_INTERVAL): str,
     }
 )
 @websocket_api.async_response
@@ -104,14 +108,9 @@ async def ws_get_performance(
     msg: dict[str, Any],
 ) -> None:
     """Fetch performance data on demand with a specific interval."""
-    entry_id = msg["entry_id"]
-    entry = hass.config_entries.async_get_entry(entry_id)
-
-    if entry is None or entry.domain != DOMAIN:
-        connection.send_error(msg["id"], "invalid_entry", "Invalid config entry")
+    coordinator = _get_coordinator(hass, connection, msg)
+    if coordinator is None:
         return
-
-    coordinator: ParqetDataUpdateCoordinator = entry.runtime_data
 
     try:
         data = await coordinator.api.async_get_performance(

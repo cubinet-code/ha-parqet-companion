@@ -12,6 +12,8 @@ from homeassistant.helpers.config_entry_oauth2_flow import (
     LocalOAuth2Implementation,
 )
 
+from .const import AUTHORIZE_URL, CLIENT_ID, DOMAIN, TOKEN_URL
+
 PKCE_DATA_KEY = "parqet_pkce"
 
 
@@ -74,3 +76,16 @@ class ParqetOAuth2Implementation(LocalOAuth2Implementation):
                 "code_verifier": code_verifier,
             }
         )
+
+
+def create_parqet_oauth_implementation(
+    hass: HomeAssistant,
+) -> ParqetOAuth2Implementation:
+    """Create the standard Parqet OAuth2 implementation."""
+    return ParqetOAuth2Implementation(
+        hass,
+        DOMAIN,
+        CLIENT_ID,
+        authorize_url=AUTHORIZE_URL,
+        token_url=TOKEN_URL,
+    )

@@ -64,10 +64,9 @@ export class ParqetCompanionCard extends LitElement {
       schema: [
         // ── General ──
         {
-          name: 'entity',
+          name: 'device_id',
           selector: {
-            entity: {
-              domain: 'sensor',
+            device: {
               integration: 'parqet',
             },
           },
@@ -180,7 +179,7 @@ export class ParqetCompanionCard extends LitElement {
       ],
       computeLabel: (schema: { name: string }) => {
         const labels: Record<string, string> = {
-          entity: 'Portfolio (leave empty for auto-detect)',
+          device_id: 'Portfolio (leave empty for auto-detect)',
           default_view: 'Default View',
           default_interval: 'Default Interval',
           currency_symbol: 'Currency Symbol',
@@ -224,25 +223,35 @@ export class ParqetCompanionCard extends LitElement {
   private _discoverPortfolios() {
     if (!this.hass?.states) return;
 
-    // If a specific entity is configured, derive the portfolio prefix from it.
-    const configuredEntity = this._config?.entity;
-    let configuredPrefix: string | null = null;
-    if (configuredEntity) {
-      // e.g. "sensor.demo_portfolio_total_value" → "sensor.demo_portfolio"
-      // or "sensor.demo_portfolio_xirr" → "sensor.demo_portfolio"
-      // Find the matching total_value sensor with the same prefix.
-      const parts = configuredEntity.replace('sensor.', '').split('_');
-      // Try progressively shorter prefixes to find the total_value sensor.
+    // Index entity registry by entity_id for O(1) lookups below.
+    const entityRegistry = this.hass.entities
+      ? new Map(Object.values(this.hass.entities).map((e) => [e.entity_id, e]))
+      : null;
+
+    let deviceEntityIds: Set<string> | null = null;
+    const configuredDeviceId = this._config?.device_id;
+    if (configuredDeviceId && entityRegistry) {
+      deviceEntityIds = new Set<string>();
+      for (const entry of entityRegistry.values()) {
+        if (entry.device_id === configuredDeviceId) {
+          deviceEntityIds.add(entry.entity_id);
+        }
+      }
+    }
+
+    // Legacy: support old configs that used an entity selector.
+    let legacyPrefix: string | null = null;
+    if (!configuredDeviceId && this._config?.entity) {
+      const parts = this._config.entity.replace('sensor.', '').split('_');
       for (let i = parts.length; i > 0; i--) {
         const candidate = 'sensor.' + parts.slice(0, i).join('_');
         if (this.hass.states[candidate + '_total_value']) {
-          configuredPrefix = candidate;
+          legacyPrefix = candidate;
           break;
         }
       }
     }
 
-    // Find all parqet total_value sensors — each represents a portfolio.
     const portfolioMap = new Map<string, DiscoveredPortfolio>();
 
     for (const [entityId, entity] of Object.entries(this.hass.states)) {
@@ -251,15 +260,22 @@ export class ParqetCompanionCard extends LitElement {
       const attrs = entity.attributes as Record<string, unknown>;
       const prefix = entityId.replace('_total_value', '');
 
-      // If a specific portfolio is configured, skip others.
-      if (configuredPrefix && prefix !== configuredPrefix) continue;
+      if (deviceEntityIds && !deviceEntityIds.has(entityId)) continue;
+      if (legacyPrefix && prefix !== legacyPrefix) continue;
 
-      const name = (prefix.replace('sensor.', '') || 'Portfolio')
-        .split('_')
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ');
+      // Prefer the device name from the registry over deriving from entity ID.
+      let name: string | null = null;
+      const regEntry = entityRegistry?.get(entityId);
+      if (regEntry?.device_id && this.hass.devices) {
+        name = this.hass.devices[regEntry.device_id]?.name ?? null;
+      }
+      if (!name) {
+        name = (prefix.replace('sensor.', '') || 'Portfolio')
+          .split('_')
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+      }
 
-      // Find all sensors with the same prefix.
       const sensors: Record<string, HassEntity> = {};
       for (const [sid, sentity] of Object.entries(this.hass.states)) {
         if (sid.startsWith(prefix + '_')) {
@@ -268,7 +284,6 @@ export class ParqetCompanionCard extends LitElement {
         }
       }
 
-      // Only include if it has multiple parqet sensors (not just any random total_value).
       if (Object.keys(sensors).length >= 3) {
         const entryId = (attrs['entry_id'] as string) || prefix;
         portfolioMap.set(prefix, {

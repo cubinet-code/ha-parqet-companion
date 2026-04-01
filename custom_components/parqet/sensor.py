@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -36,6 +37,10 @@ class ParqetSensorEntityDescription(SensorEntityDescription):
     is_percentage: bool = False
     # Whether this sensor is enabled by default.
     entity_registry_enabled_default: bool = True
+    # Optional callable for derived values that don't map to a data path.
+    custom_value_fn: Callable[[dict[str, Any]], float | None] | None = field(
+        default=None, repr=False
+    )
 
     def __post_init__(self) -> None:
         """Set state_class based on device_class if not explicitly provided."""
@@ -251,7 +256,8 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         icon="mdi:format-list-numbered",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
-        value_path="_holdings_count",
+        value_path="",
+        custom_value_fn=lambda data: len(data.get("holdings") or []),
         entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
@@ -338,10 +344,8 @@ class ParqetSensor(ParqetEntity, SensorEntity):
 
         desc = self.entity_description
 
-        # Special case: holdings count is derived, not a direct path.
-        if desc.value_path == "_holdings_count":
-            holdings = self.coordinator.data.get("holdings")
-            return len(holdings) if holdings else 0
+        if desc.custom_value_fn is not None:
+            return desc.custom_value_fn(self.coordinator.data)
 
         return _resolve_path(self.coordinator.data, desc.value_path)
 

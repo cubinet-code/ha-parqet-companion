@@ -6,7 +6,6 @@ import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlencode
 
 import aiohttp
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -57,51 +56,36 @@ class ParqetApiClient:
             return self._oauth_session.token["access_token"]
         return self._access_token or ""
 
-    async def _get(self, path: str) -> Any:
-        """Make a GET request to the Parqet API."""
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        data: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        """Make an authenticated request to the Parqet API."""
         url = f"{API_BASE_URL}{path}"
         try:
             async with asyncio.timeout(30):
                 token = await self._get_access_token()
-                headers = {
+                headers: dict[str, str] = {
                     "Authorization": f"Bearer {token}",
                 }
-                async with self._session.get(url, headers=headers) as resp:
-                    body = await resp.read()
-                    return _handle_response(resp, body)
-        except TimeoutError as err:
-            raise ParqetConnectionError(
-                f"Timeout fetching {path}"
-            ) from err
-        except ConfigEntryAuthFailed as err:
-            raise ParqetAuthError(
-                f"Token refresh failed: {err}"
-            ) from err
-        except ParqetApiError:
-            raise
-        except aiohttp.ClientError as err:
-            raise ParqetConnectionError(
-                f"Connection error fetching {path}: {err}"
-            ) from err
-
-    async def _post(self, path: str, data: dict[str, Any]) -> Any:
-        """Make a POST request to the Parqet API."""
-        url = f"{API_BASE_URL}{path}"
-        try:
-            async with asyncio.timeout(30):
-                token = await self._get_access_token()
-                headers = {
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json",
-                }
-                async with self._session.post(
-                    url, headers=headers, json=data
+                kwargs: dict[str, Any] = {"headers": headers}
+                if data is not None:
+                    headers["Content-Type"] = "application/json"
+                    kwargs["json"] = data
+                if params is not None:
+                    kwargs["params"] = params
+                async with self._session.request(
+                    method, url, **kwargs
                 ) as resp:
                     body = await resp.read()
                     return _handle_response(resp, body)
         except TimeoutError as err:
             raise ParqetConnectionError(
-                f"Timeout posting {path}"
+                f"Timeout {method} {path}"
             ) from err
         except ConfigEntryAuthFailed as err:
             raise ParqetAuthError(
@@ -111,8 +95,18 @@ class ParqetApiClient:
             raise
         except aiohttp.ClientError as err:
             raise ParqetConnectionError(
-                f"Connection error posting {path}: {err}"
+                f"Connection error {method} {path}: {err}"
             ) from err
+
+    async def _get(
+        self, path: str, *, params: dict[str, Any] | None = None
+    ) -> Any:
+        """Make a GET request to the Parqet API."""
+        return await self._request("GET", path, params=params)
+
+    async def _post(self, path: str, data: dict[str, Any]) -> Any:
+        """Make a POST request to the Parqet API."""
+        return await self._request("POST", path, data=data)
 
     # ─── Endpoints ────────────────────────────────────────────────────────────
 
@@ -156,12 +150,9 @@ class ParqetApiClient:
         if cursor:
             params["cursor"] = cursor
 
-        qs = urlencode(params, doseq=True)
-        path = f"/portfolios/{portfolio_id}/activities"
-        if qs:
-            path = f"{path}?{qs}"
-
-        return await self._get(path)
+        return await self._get(
+            f"/portfolios/{portfolio_id}/activities", params=params or None
+        )
 
 
 def _handle_response(resp: aiohttp.ClientResponse, body: bytes) -> Any:
