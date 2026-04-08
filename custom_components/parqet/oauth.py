@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import secrets
+import time
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_entry_oauth2_flow
 from homeassistant.helpers.config_entry_oauth2_flow import (
     LocalOAuth2Implementation,
 )
 
+from .const import DOMAIN
+
 PKCE_DATA_KEY = "parqet_pkce"
+REFRESH_LOCKS_KEY = "parqet_oauth_refresh_locks"
 
 
 class ParqetOAuth2Implementation(LocalOAuth2Implementation):
@@ -74,3 +80,31 @@ class ParqetOAuth2Implementation(LocalOAuth2Implementation):
                 "code_verifier": code_verifier,
             }
         )
+
+
+class ParqetOAuth2Session(config_entry_oauth2_flow.OAuth2Session):
+    """Serialize refresh when multiple entries share one refresh_token (rotation-safe)."""
+
+    async def async_ensure_token_valid(self) -> None:
+        """Ensure token is valid, coordinating refresh across entries."""
+        token = self.config_entry.data.get("token", {})
+        refresh = token.get("refresh_token")
+
+        if not refresh:
+            return await super().async_ensure_token_valid()
+
+        locks = self.hass.data.setdefault(REFRESH_LOCKS_KEY, {})
+        key = hashlib.sha256(refresh.encode("utf-8")).hexdigest()
+
+        async with locks.setdefault(key, asyncio.Lock()):
+            current = self.config_entry.data.get("token", {})
+            if current.get("expires_at", 0) > time.time() + config_entry_oauth2_flow.CLOCK_OUT_OF_SYNC_MAX_SEC:
+                return
+
+            new_token = await self.implementation.async_refresh_token(current)
+
+            for entry in self.hass.config_entries.async_entries(DOMAIN):
+                if entry.data.get("token", {}).get("refresh_token") == refresh:
+                    self.hass.config_entries.async_update_entry(
+                        entry, data={**entry.data, "token": new_token}
+                    )

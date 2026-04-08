@@ -226,7 +226,7 @@ async def init_integration(
             ".async_get_config_entry_implementation",
         ),
         patch(
-            "custom_components.parqet.config_entry_oauth2_flow.OAuth2Session",
+            "custom_components.parqet.ParqetOAuth2Session",
             return_value=AsyncMock(token={"access_token": "mock_token"}),
         ),
         patch(

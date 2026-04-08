@@ -25,7 +25,7 @@ from .const import (
 )
 from .coordinator import ParqetDataUpdateCoordinator
 from .frontend import async_register_frontend
-from .oauth import ParqetOAuth2Implementation
+from .oauth import ParqetOAuth2Implementation, ParqetOAuth2Session
 from .websocket_api import async_register_websocket_api
 
 _LOGGER = logging.getLogger(__name__)
@@ -71,9 +71,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ParqetConfigEntry) -> bo
             "OAuth2 implementation not available"
         ) from err
 
-    oauth_session = config_entry_oauth2_flow.OAuth2Session(
-        hass, entry, implementation
-    )
+    oauth_session = ParqetOAuth2Session(hass, entry, implementation)
 
     try:
         await oauth_session.async_ensure_token_valid()
