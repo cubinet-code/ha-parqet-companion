@@ -238,6 +238,94 @@ describe('ParqetHoldingsView', () => {
     });
   });
 
+  describe('cached-data fallback', () => {
+    it('uses parqet/get_holdings when switching back to default interval', async () => {
+      const send = makeSendMessage(
+        { holdings: DEFAULT_HOLDINGS },
+        { holdings: DAILY_HOLDINGS, performance: {} },
+      );
+      const view = new HoldingsView();
+      view.hass = makeHass(send);
+      view.portfolio = makePortfolio();
+      view.config = makeConfig({ default_interval: 'max', show_interval_selector: true });
+
+      view.connectedCallback();
+      await vi.waitFor(() => {
+        expect(send).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'parqet/get_holdings' }),
+        );
+      });
+
+      // Switch to 1d (uses get_performance)
+      await view._onIntervalChange(
+        new CustomEvent('interval-change', { detail: { interval: '1d' } }),
+      );
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'parqet/get_performance' }),
+      );
+
+      // Switch back to default (should use cached get_holdings, not get_performance)
+      send.mockClear();
+      await view._onIntervalChange(
+        new CustomEvent('interval-change', { detail: { interval: 'max' } }),
+      );
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'parqet/get_holdings' }),
+      );
+      expect(send).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'parqet/get_performance' }),
+      );
+    });
+  });
+
+  describe('race condition protection', () => {
+    it('discards stale response when a newer interval is selected', async () => {
+      let resolveFirst!: (v: unknown) => void;
+      const slowResponse = new Promise((r) => { resolveFirst = r; });
+
+      const send = vi.fn().mockImplementation((msg: Record<string, unknown>) => {
+        if (msg.type === 'parqet/get_holdings') {
+          return Promise.resolve({ holdings: DEFAULT_HOLDINGS });
+        }
+        if (msg.type === 'parqet/get_performance') {
+          if (msg.interval === '1d') return slowResponse;
+          return Promise.resolve({ holdings: DAILY_HOLDINGS });
+        }
+        return Promise.reject(new Error('unexpected'));
+      });
+
+      const view = new HoldingsView();
+      view.hass = makeHass(send);
+      view.portfolio = makePortfolio();
+      view.config = makeConfig({ show_interval_selector: true });
+
+      view.connectedCallback();
+      await vi.waitFor(() => {
+        expect(send).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'parqet/get_holdings' }),
+        );
+      });
+
+      // Fire first (slow) interval change
+      const firstChange = view._onIntervalChange(
+        new CustomEvent('interval-change', { detail: { interval: '1d' } }),
+      );
+
+      // Immediately fire second interval change (faster)
+      await view._onIntervalChange(
+        new CustomEvent('interval-change', { detail: { interval: '1w' } }),
+      );
+
+      // Now resolve the slow first response — it should be discarded
+      resolveFirst({ holdings: DEFAULT_HOLDINGS });
+      await firstChange;
+
+      // Holdings should be from the second (1w) response, not the first (1d)
+      expect(view._holdings).toHaveLength(1); // DAILY_HOLDINGS has 1 item
+      expect(view._interval).toBe('1w');
+    });
+  });
+
   describe('error handling', () => {
     it('sets error state when performance WS call fails', async () => {
       const send = vi.fn().mockImplementation((msg: Record<string, unknown>) => {

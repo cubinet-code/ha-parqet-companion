@@ -28,6 +28,8 @@ export class ParqetHoldingsView extends LitElement {
   @state() private _sortAsc = false;
   @state() private _expandedId: string | null = null;
 
+  _fetchGen = 0;
+
   connectedCallback() {
     super.connectedCallback();
     this._interval = (this.config?.default_interval as IntervalValue) ?? 'max';
@@ -38,8 +40,13 @@ export class ParqetHoldingsView extends LitElement {
     if (changed.has('portfolio')) void this._load();
   }
 
+  private _defaultInterval(): IntervalValue {
+    return (this.config?.default_interval as IntervalValue) ?? 'max';
+  }
+
   private async _load() {
     if (!this.hass || !this.portfolio) return;
+    const gen = ++this._fetchGen;
     this._loading = true;
     this._error = '';
 
@@ -48,16 +55,25 @@ export class ParqetHoldingsView extends LitElement {
         type: 'parqet/get_holdings',
         entry_id: this.portfolio.entryId,
       })) as { holdings: Holding[] };
+      if (gen !== this._fetchGen) return;
       this._holdings = (result.holdings || []).filter((h) => !h.position?.isSold);
     } catch {
+      if (gen !== this._fetchGen) return;
       this._error = 'Failed to load holdings';
     } finally {
-      this._loading = false;
+      if (gen === this._fetchGen) this._loading = false;
     }
   }
 
   async _onIntervalChange(e: CustomEvent) {
     this._interval = e.detail.interval as IntervalValue;
+
+    // Use cached coordinator data when switching back to the default interval
+    if (this._interval === this._defaultInterval()) {
+      return this._load();
+    }
+
+    const gen = ++this._fetchGen;
     this._loading = true;
     this._error = '';
 
@@ -67,11 +83,13 @@ export class ParqetHoldingsView extends LitElement {
         entry_id: this.portfolio.entryId,
         interval: this._interval,
       })) as { holdings: Holding[] };
+      if (gen !== this._fetchGen) return;
       this._holdings = (result.holdings || []).filter((h) => !h.position?.isSold);
     } catch {
+      if (gen !== this._fetchGen) return;
       this._error = 'Failed to load holdings';
     } finally {
-      this._loading = false;
+      if (gen === this._fetchGen) this._loading = false;
     }
   }
 
@@ -83,8 +101,7 @@ export class ParqetHoldingsView extends LitElement {
     return this._holdings.reduce((sum, h) => sum + (h.position?.currentValue ?? 0), 0);
   }
 
-  private _sorted(): Holding[] {
-    const total = this._totalValue();
+  private _sorted(total: number): Holding[] {
     const sorted = [...this._holdings].sort((a, b) => {
       switch (this._sortBy) {
         case 'name': return (a.asset?.name ?? '').localeCompare(b.asset?.name ?? '');
@@ -108,10 +125,6 @@ export class ParqetHoldingsView extends LitElement {
   }
 
   render() {
-    const total = this._totalValue();
-    const limit = this.config?.holdings_limit ?? 50;
-    const sorted = this._sorted().slice(0, limit);
-
     return html`
       ${this.config?.show_interval_selector !== false ? html`
         <parqet-interval-selector
@@ -121,10 +134,15 @@ export class ParqetHoldingsView extends LitElement {
       ` : ''}
 
       ${this._loading ? html`<parqet-loading-spinner></parqet-loading-spinner>` : ''}
-      ${this._error ? html`<div class="error">${this._error}</div>` : ''}
+      ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : ''}
       ${!this._loading && !this._error && !this._holdings.length ? html`<div class="empty">No holdings found.</div>` : ''}
 
-      ${!this._loading && !this._error && this._holdings.length ? html`
+      ${!this._loading && !this._error && this._holdings.length ? (() => {
+        const total = this._totalValue();
+        const limit = this.config?.holdings_limit ?? 50;
+        const sorted = this._sorted(total).slice(0, limit);
+
+        return html`
       ${(this.config?.show_allocation_chart ?? this.config?.show_chart) !== false ? html`
         <parqet-donut-chart
           .segments=${(() => {
@@ -196,7 +214,8 @@ export class ParqetHoldingsView extends LitElement {
           </tbody>
         </table>
       </div>
-      ` : ''}
+        `;
+      })() : ''}
     `;
   }
 
