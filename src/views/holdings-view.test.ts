@@ -135,19 +135,26 @@ describe('ParqetHoldingsView', () => {
     HoldingsView = mod.ParqetHoldingsView;
   });
 
-  describe('initial load (default interval)', () => {
-    it('fetches holdings via parqet/get_holdings on initial load', async () => {
-      const send = makeSendMessage({ holdings: DEFAULT_HOLDINGS });
+  describe('initial load', () => {
+    it('fetches via parqet/get_performance with the configured interval on initial load', async () => {
+      const send = makeSendMessage(
+        { holdings: DEFAULT_HOLDINGS },
+        { holdings: DEFAULT_HOLDINGS, performance: {} },
+      );
       const view = new HoldingsView();
       view.hass = makeHass(send);
       view.portfolio = makePortfolio();
-      view.config = makeConfig();
+      view.config = makeConfig({ default_interval: '1d' });
 
       view.connectedCallback();
 
       await vi.waitFor(() => {
         expect(send).toHaveBeenCalledWith(
-          expect.objectContaining({ type: 'parqet/get_holdings', entry_id: 'entry1' }),
+          expect.objectContaining({
+            type: 'parqet/get_performance',
+            entry_id: 'entry1',
+            interval: '1d',
+          }),
         );
       });
     });
@@ -167,11 +174,10 @@ describe('ParqetHoldingsView', () => {
       view.connectedCallback();
       await vi.waitFor(() => {
         expect(send).toHaveBeenCalledWith(
-          expect.objectContaining({ type: 'parqet/get_holdings' }),
+          expect.objectContaining({ type: 'parqet/get_performance' }),
         );
       });
 
-      // Simulate interval change — the view must expose _onIntervalChange
       await view._onIntervalChange(
         new CustomEvent('interval-change', { detail: { interval: '1d' } }),
       );
@@ -198,7 +204,7 @@ describe('ParqetHoldingsView', () => {
       view.connectedCallback();
       await vi.waitFor(() => {
         expect(send).toHaveBeenCalledWith(
-          expect.objectContaining({ type: 'parqet/get_holdings' }),
+          expect.objectContaining({ type: 'parqet/get_performance' }),
         );
       });
 
@@ -206,9 +212,8 @@ describe('ParqetHoldingsView', () => {
         new CustomEvent('interval-change', { detail: { interval: '1d' } }),
       );
 
-      // After switching to 1d, _holdings should reflect the daily data
       const holdings = view._holdings;
-      expect(holdings).toHaveLength(1); // DAILY_HOLDINGS only has 1 item
+      expect(holdings).toHaveLength(1);
       expect(holdings[0].performance.unrealizedGains.inInterval.gainGross).toBe(15);
     });
 
@@ -238,8 +243,8 @@ describe('ParqetHoldingsView', () => {
     });
   });
 
-  describe('cached-data fallback', () => {
-    it('uses parqet/get_holdings when switching back to default interval', async () => {
+  describe('interval consistency', () => {
+    it('always fetches with the selected interval via parqet/get_performance', async () => {
       const send = makeSendMessage(
         { holdings: DEFAULT_HOLDINGS },
         { holdings: DAILY_HOLDINGS, performance: {} },
@@ -247,33 +252,29 @@ describe('ParqetHoldingsView', () => {
       const view = new HoldingsView();
       view.hass = makeHass(send);
       view.portfolio = makePortfolio();
-      view.config = makeConfig({ default_interval: 'max', show_interval_selector: true });
+      view.config = makeConfig({ default_interval: '1d', show_interval_selector: true });
 
       view.connectedCallback();
       await vi.waitFor(() => {
         expect(send).toHaveBeenCalledWith(
-          expect.objectContaining({ type: 'parqet/get_holdings' }),
+          expect.objectContaining({ type: 'parqet/get_performance', interval: '1d' }),
         );
       });
 
-      // Switch to 1d (uses get_performance)
-      await view._onIntervalChange(
-        new CustomEvent('interval-change', { detail: { interval: '1d' } }),
-      );
-      expect(send).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'parqet/get_performance' }),
-      );
-
-      // Switch back to default (should use cached get_holdings, not get_performance)
-      send.mockClear();
+      // Switch to max
       await view._onIntervalChange(
         new CustomEvent('interval-change', { detail: { interval: 'max' } }),
       );
       expect(send).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'parqet/get_holdings' }),
+        expect.objectContaining({ type: 'parqet/get_performance', interval: 'max' }),
       );
-      expect(send).not.toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'parqet/get_performance' }),
+
+      // Switch back to 1d
+      await view._onIntervalChange(
+        new CustomEvent('interval-change', { detail: { interval: '1d' } }),
+      );
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'parqet/get_performance', interval: '1d' }),
       );
     });
   });
@@ -302,7 +303,7 @@ describe('ParqetHoldingsView', () => {
       view.connectedCallback();
       await vi.waitFor(() => {
         expect(send).toHaveBeenCalledWith(
-          expect.objectContaining({ type: 'parqet/get_holdings' }),
+          expect.objectContaining({ type: 'parqet/get_performance' }),
         );
       });
 
@@ -346,7 +347,7 @@ describe('ParqetHoldingsView', () => {
       view.connectedCallback();
       await vi.waitFor(() => {
         expect(send).toHaveBeenCalledWith(
-          expect.objectContaining({ type: 'parqet/get_holdings' }),
+          expect.objectContaining({ type: 'parqet/get_performance' }),
         );
       });
 

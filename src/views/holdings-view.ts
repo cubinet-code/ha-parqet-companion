@@ -40,39 +40,8 @@ export class ParqetHoldingsView extends LitElement {
     if (changed.has('portfolio')) void this._load();
   }
 
-  private _defaultInterval(): IntervalValue {
-    return (this.config?.default_interval as IntervalValue) ?? 'max';
-  }
-
   private async _load() {
     if (!this.hass || !this.portfolio) return;
-    const gen = ++this._fetchGen;
-    this._loading = true;
-    this._error = '';
-
-    try {
-      const result = (await this.hass.connection.sendMessagePromise({
-        type: 'parqet/get_holdings',
-        entry_id: this.portfolio.entryId,
-      })) as { holdings: Holding[] };
-      if (gen !== this._fetchGen) return;
-      this._holdings = (result.holdings || []).filter((h) => !h.position?.isSold);
-    } catch {
-      if (gen !== this._fetchGen) return;
-      this._error = 'Failed to load holdings';
-    } finally {
-      if (gen === this._fetchGen) this._loading = false;
-    }
-  }
-
-  async _onIntervalChange(e: CustomEvent) {
-    this._interval = e.detail.interval as IntervalValue;
-
-    // Use cached coordinator data when switching back to the default interval
-    if (this._interval === this._defaultInterval()) {
-      return this._load();
-    }
-
     const gen = ++this._fetchGen;
     this._loading = true;
     this._error = '';
@@ -91,6 +60,11 @@ export class ParqetHoldingsView extends LitElement {
     } finally {
       if (gen === this._fetchGen) this._loading = false;
     }
+  }
+
+  async _onIntervalChange(e: CustomEvent) {
+    this._interval = e.detail.interval as IntervalValue;
+    return this._load();
   }
 
   private _sym(): string {
