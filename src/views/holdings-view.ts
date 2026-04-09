@@ -1,7 +1,9 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, Holding } from '../types';
+import type { IntervalValue } from '../const';
 import { fmtCurrency, fmtPct, valueClass } from '../utils';
+import '../components/interval-selector';
 import '../components/loading-spinner';
 import '../components/donut-chart';
 
@@ -18,15 +20,17 @@ export class ParqetHoldingsView extends LitElement {
   @property({ attribute: false }) portfolio!: DiscoveredPortfolio;
   @property({ attribute: false }) config!: ParqetCardConfig;
 
-  @state() private _holdings: Holding[] = [];
-  @state() private _loading = false;
-  @state() private _error = '';
+  @state() _holdings: Holding[] = [];
+  @state() _loading = false;
+  @state() _error = '';
+  @state() _interval: IntervalValue = 'max';
   @state() private _sortBy: 'name' | 'value' | 'pl' | 'plPct' | 'weight' = 'value';
   @state() private _sortAsc = false;
   @state() private _expandedId: string | null = null;
 
   connectedCallback() {
     super.connectedCallback();
+    this._interval = (this.config?.default_interval as IntervalValue) ?? 'max';
     void this._load();
   }
 
@@ -43,6 +47,25 @@ export class ParqetHoldingsView extends LitElement {
       const result = (await this.hass.connection.sendMessagePromise({
         type: 'parqet/get_holdings',
         entry_id: this.portfolio.entryId,
+      })) as { holdings: Holding[] };
+      this._holdings = (result.holdings || []).filter((h) => !h.position?.isSold);
+    } catch {
+      this._error = 'Failed to load holdings';
+    } finally {
+      this._loading = false;
+    }
+  }
+
+  async _onIntervalChange(e: CustomEvent) {
+    this._interval = e.detail.interval as IntervalValue;
+    this._loading = true;
+    this._error = '';
+
+    try {
+      const result = (await this.hass.connection.sendMessagePromise({
+        type: 'parqet/get_performance',
+        entry_id: this.portfolio.entryId,
+        interval: this._interval,
       })) as { holdings: Holding[] };
       this._holdings = (result.holdings || []).filter((h) => !h.position?.isSold);
     } catch {
@@ -85,15 +108,23 @@ export class ParqetHoldingsView extends LitElement {
   }
 
   render() {
-    if (this._loading) return html`<parqet-loading-spinner></parqet-loading-spinner>`;
-    if (this._error) return html`<div class="error">${this._error}</div>`;
-    if (!this._holdings.length) return html`<div class="empty">No holdings found.</div>`;
-
     const total = this._totalValue();
     const limit = this.config?.holdings_limit ?? 50;
     const sorted = this._sorted().slice(0, limit);
 
     return html`
+      ${this.config?.show_interval_selector !== false ? html`
+        <parqet-interval-selector
+          .selected=${this._interval}
+          @interval-change=${this._onIntervalChange}
+        ></parqet-interval-selector>
+      ` : ''}
+
+      ${this._loading ? html`<parqet-loading-spinner></parqet-loading-spinner>` : ''}
+      ${this._error ? html`<div class="error">${this._error}</div>` : ''}
+      ${!this._loading && !this._error && !this._holdings.length ? html`<div class="empty">No holdings found.</div>` : ''}
+
+      ${!this._loading && !this._error && this._holdings.length ? html`
       ${(this.config?.show_allocation_chart ?? this.config?.show_chart) !== false ? html`
         <parqet-donut-chart
           .segments=${(() => {
@@ -165,6 +196,7 @@ export class ParqetHoldingsView extends LitElement {
           </tbody>
         </table>
       </div>
+      ` : ''}
     `;
   }
 

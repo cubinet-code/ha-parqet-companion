@@ -6004,13 +6004,95 @@
               "negative"
             ],
             "additionalProperties": false
+          },
+          "charts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "mark": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "bod",
+                      "description": "If mark is \"bod\", the values are taken at the begin of day of the `date` timestamp."
+                    },
+                    {
+                      "type": "string",
+                      "const": "eod",
+                      "description": "If mark is \"eod\", the values are taken at the end of day of the `date` timestamp."
+                    },
+                    {
+                      "type": "string",
+                      "const": "most_recent",
+                      "description": "If mark is \"most_recent\", the values are the most recent values on the day of the `date` timestamp. Only present when `date` is today. Not present when dealing with intraday charts."
+                    },
+                    {
+                      "type": "string",
+                      "const": "exact_date",
+                      "description": "If mark is \"exact_date\", the `date` timestamp can be taken literally. The values are taken at the exact millisecond. Only present for intraday charts."
+                    }
+                  ]
+                },
+                "date": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                },
+                "values": {
+                  "type": "object",
+                  "properties": {
+                    "history": {
+                      "type": "number",
+                      "description": "Total market value of the portfolio at this point in time."
+                    },
+                    "capitalHistory": {
+                      "type": "number",
+                      "description": "Total capital contributed by the user up to this point (net invested amount)."
+                    },
+                    "perfHistory": {
+                      "type": "number",
+                      "description": "Total performance in percent for the selected interval. \nIncludes unrealized P/L, realized gains, and dividends."
+                    },
+                    "perfHistoryUnrealized": {
+                      "type": "number",
+                      "description": "Unrealized performance in percent for the selected interval.\nExcludes realized gains and dividends."
+                    },
+                    "ttwror": {
+                      "type": "number",
+                      "description": "True Time-Weighted Rate of Return (TTWROR), cumulative in percent. Designed to minimize distortion from deposits and withdrawals."
+                    },
+                    "drawdown": {
+                      "type": "number",
+                      "description": "Drawdown in percent from the previous peak value. 0 means at peak, negative values mean below peak."
+                    }
+                  },
+                  "required": [
+                    "history",
+                    "capitalHistory",
+                    "perfHistory",
+                    "perfHistoryUnrealized",
+                    "ttwror",
+                    "drawdown"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "mark",
+                "date",
+                "values"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
           "performance",
           "holdings",
           "interval",
-          "netAllocations"
+          "netAllocations",
+          "charts"
         ],
         "additionalProperties": false
       }
