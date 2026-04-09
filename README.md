@@ -174,13 +174,15 @@ compact: false
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
+| `device_id` | string | — | Lock card to a specific portfolio device |
 | `entity` | string | — | Lock card to a specific portfolio (pick any Parqet sensor) |
 | `default_view` | string | `performance` | Initial tab: `performance`, `holdings`, or `activities` |
 | `default_interval` | string | `1y` | Default performance interval |
 | `currency_symbol` | string | `€` | Currency symbol for formatting |
 | `holdings_limit` | number | `50` | Maximum holdings shown in table |
 | `activities_limit` | number | `25` | Activities loaded per page |
-| `show_interval_selector` | boolean | `true` | Show interval picker (Performance) |
+| `default_activity_type` | string | — | Pre-filter activities by type (e.g. `dividend`, `buy`) |
+| `show_interval_selector` | boolean | `true` | Show interval picker (Performance & Holdings) |
 | `show_performance_chart` | boolean | `true` | Show stacked breakdown chart (Performance) |
 | `show_allocation_chart` | boolean | `true` | Show donut allocation chart (Holdings) |
 | `show_logo` | boolean | `true` | Show holding logos (Holdings) |
