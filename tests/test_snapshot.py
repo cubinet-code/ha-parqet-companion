@@ -251,6 +251,34 @@ class TestGetSnapshotData:
         assert h1["daily_pl"] == 500.0
         assert h2["daily_pl"] is None
 
+    def test_new_holdings_dont_inflate_total_pl(self) -> None:
+        """Total daily P&L should only count holdings with a snapshot baseline."""
+        coordinator = _make_coordinator()
+        mgr = SnapshotManager(_make_hass(), coordinator, "entry1", 22, 0)
+        mgr._data = {
+            "snapshots": {
+                "2026-04-08": {
+                    "taken_at": "2026-04-08T22:00:00+02:00",
+                    "holdings": {
+                        # Only holding_1 existed yesterday at 5000
+                        "holding_1": {"price": 50.0, "value": 5000.0, "shares": 100, "name": "Test Stock"},
+                    },
+                    "total_value": 5000.0,
+                }
+            }
+        }
+
+        with patch("custom_components.parqet.snapshot.date") as mock_date:
+            mock_date.today.return_value = date(2026, 4, 9)
+            mock_date.fromisoformat = date.fromisoformat
+            result = mgr.get_snapshot_data()
+
+        # holding_1: 5500 - 5000 = 500 P&L
+        # holding_2: new, no baseline — excluded from total P&L
+        assert result["total_daily_pl"] == 500.0
+        # total_value includes both holdings
+        assert result["total_value"] == 11000.0
+
 
 class TestPurge:
     """Test purging all snapshots."""

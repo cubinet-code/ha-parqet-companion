@@ -9,13 +9,14 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN
+from .snapshot import SnapshotManager
 
 
 def _get_snapshot_manager(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
-) -> Any | None:
+) -> SnapshotManager | None:
     """Validate entry and return its SnapshotManager, or send error."""
     entry_id = msg["entry_id"]
     entry = hass.config_entries.async_get_entry(entry_id)

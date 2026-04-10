@@ -6,7 +6,7 @@ import type {
   HassEntityRegistryDisplayEntry,
   DiscoveredPortfolio,
 } from './types';
-import { fmtCurrency, fmtPct, valueClass } from './utils';
+import { fmtCurrency, fmtPct, fmtDate, valueClass } from './utils';
 import './components/loading-spinner';
 
 // ─── Card registration ──────────────────────────────────────────────────────
@@ -186,7 +186,7 @@ export class ParqetSnapshotCard extends LitElement {
           <div class="header">
             <span class="title">${this._portfolio.name}</span>
             ${this._data?.snapshot_date ? html`
-              <span class="subtitle">vs. ${this._data.snapshot_date}</span>
+              <span class="subtitle">vs. ${fmtDate(this._data.snapshot_date!)}</span>
             ` : ''}
           </div>
         ` : ''}

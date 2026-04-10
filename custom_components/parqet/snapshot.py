@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, date, datetime
 from typing import Any
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 
@@ -38,7 +38,7 @@ class SnapshotManager:
             hass, STORAGE_VERSION, f"parqet_snapshots_{entry_id}"
         )
         self._data: dict[str, Any] = {"snapshots": {}}
-        self._unsub: Any = None
+        self._unsub: CALLBACK_TYPE | None = None
 
     async def async_setup(self) -> None:
         """Load stored snapshots and register the daily time listener."""
@@ -46,12 +46,10 @@ class SnapshotManager:
         if stored:
             self._data = stored
 
-        # Take an initial snapshot if none exists for today.
         today = date.today().isoformat()
         if today not in self._data["snapshots"]:
             await self.async_take_snapshot()
 
-        # Register daily time trigger.
         self._unsub = async_track_time_change(
             self._hass,
             self._on_time,
@@ -68,7 +66,10 @@ class SnapshotManager:
 
     async def _on_time(self, _now: datetime) -> None:
         """Callback fired daily at the configured time."""
-        await self.async_take_snapshot()
+        try:
+            await self.async_take_snapshot()
+        except Exception:
+            _LOGGER.exception("Failed to take daily snapshot")
 
     async def async_take_snapshot(self) -> dict[str, Any] | None:
         """Capture current holdings from the coordinator and persist."""
@@ -76,6 +77,9 @@ class SnapshotManager:
         if not data or "holdings" not in data:
             _LOGGER.warning("No coordinator data available for snapshot")
             return None
+
+        today = date.today()
+        today_str = today.isoformat()
 
         holdings_snapshot: dict[str, dict[str, Any]] = {}
         for h in data["holdings"]:
@@ -97,18 +101,17 @@ class SnapshotManager:
             "total_value": total_value,
         }
 
-        today = date.today().isoformat()
-        self._data["snapshots"][today] = snapshot
+        self._data["snapshots"][today_str] = snapshot
 
-        self._prune_old_snapshots()
+        self._prune_old_snapshots(today)
         await self._store.async_save(self._data)
 
-        _LOGGER.debug("Snapshot taken for %s: %d holdings", today, len(holdings_snapshot))
+        _LOGGER.debug("Snapshot taken for %s: %d holdings", today_str, len(holdings_snapshot))
         return snapshot
 
-    def _prune_old_snapshots(self) -> None:
+    def _prune_old_snapshots(self, today: date) -> None:
         """Remove snapshots older than the retention period."""
-        cutoff = date.today().toordinal() - SNAPSHOT_RETENTION_DAYS
+        cutoff = today.toordinal() - SNAPSHOT_RETENTION_DAYS
         to_remove = [
             k
             for k in self._data["snapshots"]
@@ -122,7 +125,6 @@ class SnapshotManager:
         data = self._coordinator.data or {}
         current_holdings = data.get("holdings", [])
 
-        # Find most recent snapshot before today.
         today = date.today().isoformat()
         prev_dates = sorted(
             (k for k in self._data["snapshots"] if k < today),
@@ -133,6 +135,7 @@ class SnapshotManager:
         )
         prev_holdings = prev_snapshot["holdings"] if prev_snapshot else {}
 
+        total_value_with_baseline = 0.0
         total_value = 0.0
         total_snapshot_value = 0.0
         has_previous = bool(prev_snapshot)
@@ -158,6 +161,7 @@ class SnapshotManager:
                 daily_pl_pct = (
                     (daily_pl / snapshot_value * 100) if snapshot_value else 0
                 )
+                total_value_with_baseline += current_value
                 total_snapshot_value += snapshot_value
             else:
                 snapshot_value = None
@@ -181,7 +185,7 @@ class SnapshotManager:
                 }
             )
 
-        # Compute weights.
+        # Compute weights based on total portfolio value (all holdings).
         for h in result_holdings:
             h["weight"] = (
                 round(h["current_value"] / total_value * 100, 1)
@@ -189,8 +193,11 @@ class SnapshotManager:
                 else 0
             )
 
+        # Total P&L only includes holdings that have a snapshot baseline.
         total_daily_pl = (
-            (total_value - total_snapshot_value) if has_previous else None
+            (total_value_with_baseline - total_snapshot_value)
+            if has_previous
+            else None
         )
         total_daily_pl_pct = (
             (total_daily_pl / total_snapshot_value * 100)
