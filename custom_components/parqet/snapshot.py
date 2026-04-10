@@ -42,13 +42,27 @@ class SnapshotManager:
 
     async def async_setup(self) -> None:
         """Load stored snapshots and register the daily time listener."""
+        _LOGGER.debug(
+            "Setting up snapshot manager for %s (time=%02d:%02d)",
+            self._entry_id, self._hour, self._minute,
+        )
         stored = await self._store.async_load()
         if stored:
             self._data = stored
+            _LOGGER.debug(
+                "Loaded %d stored snapshots: %s",
+                len(self._data["snapshots"]),
+                list(self._data["snapshots"].keys()),
+            )
+        else:
+            _LOGGER.debug("No stored snapshots found, starting fresh")
 
         today = date.today().isoformat()
         if today not in self._data["snapshots"]:
+            _LOGGER.debug("No snapshot for today (%s), taking initial snapshot", today)
             await self.async_take_snapshot()
+        else:
+            _LOGGER.debug("Snapshot for today (%s) already exists, skipping", today)
 
         self._unsub = async_track_time_change(
             self._hass,
@@ -57,6 +71,7 @@ class SnapshotManager:
             minute=self._minute,
             second=0,
         )
+        _LOGGER.debug("Daily snapshot timer registered for %02d:%02d", self._hour, self._minute)
 
     async def async_teardown(self) -> None:
         """Unsubscribe the time listener."""
@@ -66,6 +81,7 @@ class SnapshotManager:
 
     async def _on_time(self, _now: datetime) -> None:
         """Callback fired daily at the configured time."""
+        _LOGGER.debug("Daily snapshot timer fired at %s", _now.isoformat())
         try:
             await self.async_take_snapshot()
         except Exception:
