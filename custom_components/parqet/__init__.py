@@ -99,18 +99,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ParqetConfigEntry) -> bo
     entry.runtime_data = coordinator
 
     # Set up daily snapshot manager if enabled.
+    # Wrapped in try/except so a snapshot failure never prevents core integration setup.
     if entry.options.get(CONF_SNAPSHOT_ENABLED, False):
-        snapshot_mgr = SnapshotManager(
-            hass,
-            coordinator,
-            entry.entry_id,
-            entry.options.get(CONF_SNAPSHOT_HOUR, DEFAULT_SNAPSHOT_HOUR),
-            entry.options.get(CONF_SNAPSHOT_MINUTE, DEFAULT_SNAPSHOT_MINUTE),
-        )
-        await snapshot_mgr.async_setup()
-        hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
-            "snapshot_manager": snapshot_mgr,
-        }
+        try:
+            snapshot_mgr = SnapshotManager(
+                hass,
+                coordinator,
+                entry.entry_id,
+                entry.options.get(CONF_SNAPSHOT_HOUR, DEFAULT_SNAPSHOT_HOUR),
+                entry.options.get(CONF_SNAPSHOT_MINUTE, DEFAULT_SNAPSHOT_MINUTE),
+            )
+            await snapshot_mgr.async_setup()
+            hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
+                "snapshot_manager": snapshot_mgr,
+            }
+        except Exception:
+            _LOGGER.exception("Failed to set up daily snapshot manager")
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
