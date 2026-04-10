@@ -207,6 +207,7 @@ class SnapshotManager:
 
         return {
             "snapshot_date": prev_dates[0] if prev_dates else None,
+            "snapshot_taken_at": prev_snapshot["taken_at"] if prev_snapshot else None,
             "holdings": result_holdings,
             "total_value": total_value,
             "total_snapshot_value": total_snapshot_value if has_previous else None,

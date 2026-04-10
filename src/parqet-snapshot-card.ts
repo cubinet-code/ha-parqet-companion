@@ -5,7 +5,7 @@ import type {
   HassEntityRegistryDisplayEntry,
   DiscoveredPortfolio,
 } from './types';
-import { fmtCurrency, fmtPct, fmtDate, valueClass } from './utils';
+import { fmtCurrency, fmtPct, valueClass } from './utils';
 import './components/loading-spinner';
 
 // ─── Card registration ──────────────────────────────────────────────────────
@@ -38,6 +38,7 @@ interface SnapshotHolding {
 
 interface SnapshotData {
   snapshot_date: string | null;
+  snapshot_taken_at: string | null;
   holdings: SnapshotHolding[];
   total_value: number;
   total_snapshot_value: number | null;
@@ -158,6 +159,18 @@ export class ParqetSnapshotCard extends LitElement {
     return this._config?.currency_symbol ?? '€';
   }
 
+  private _fmtSnapshot(iso: string): string {
+    try {
+      const dt = new Date(iso);
+      return dt.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+    } catch {
+      return iso;
+    }
+  }
+
   private _sorted(): SnapshotHolding[] {
     if (!this._data) return [];
     const sorted = [...this._data.holdings].sort((a, b) => {
@@ -184,8 +197,8 @@ export class ParqetSnapshotCard extends LitElement {
         ${this._portfolio ? html`
           <div class="header">
             <span class="title">${this._portfolio.name}</span>
-            ${this._data?.snapshot_date ? html`
-              <span class="subtitle">vs. ${fmtDate(this._data.snapshot_date!)}</span>
+            ${this._data?.snapshot_taken_at ? html`
+              <span class="subtitle">vs. ${this._fmtSnapshot(this._data.snapshot_taken_at)}</span>
             ` : ''}
           </div>
         ` : ''}
