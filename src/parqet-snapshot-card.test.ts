@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Hass, ParqetCardConfig, DiscoveredPortfolio } from './types';
+import type { Hass, DiscoveredPortfolio } from './types';
 
 vi.mock('lit', () => {
   class FakeLitElement {
