@@ -37,7 +37,10 @@
         "title": "Parqet Options",
         "data": {
           "interval": "Performance interval",
-          "scan_interval": "Update frequency (minutes)"
+          "scan_interval": "Update frequency (minutes)",
+          "snapshot_enabled": "Enable daily snapshots",
+          "snapshot_hour": "Snapshot hour (0-23)",
+          "snapshot_minute": "Snapshot minute (0-59)"
         }
       }
     }

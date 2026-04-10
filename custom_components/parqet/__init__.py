@@ -17,12 +17,19 @@ from .const import (
     CONF_PORTFOLIO_ID,
     CONF_PORTFOLIO_NAME,
     CONF_SCAN_INTERVAL,
+    CONF_SNAPSHOT_ENABLED,
+    CONF_SNAPSHOT_HOUR,
+    CONF_SNAPSHOT_MINUTE,
     DEFAULT_INTERVAL,
+    DEFAULT_SNAPSHOT_HOUR,
+    DEFAULT_SNAPSHOT_MINUTE,
     DOMAIN,
 )
 from .coordinator import ParqetDataUpdateCoordinator
 from .frontend import async_register_frontend
 from .oauth import create_parqet_oauth_implementation
+from .snapshot import SnapshotManager
+from .snapshot_ws import async_register_snapshot_ws
 from .websocket_api import async_register_websocket_api
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,6 +52,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     # Register WebSocket API commands (once, not per entry).
     async_register_websocket_api(hass)
+    async_register_snapshot_ws(hass)
 
     return True
 
@@ -90,6 +98,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ParqetConfigEntry) -> bo
 
     entry.runtime_data = coordinator
 
+    # Set up daily snapshot manager if enabled.
+    if entry.options.get(CONF_SNAPSHOT_ENABLED, False):
+        snapshot_mgr = SnapshotManager(
+            hass,
+            coordinator,
+            entry.entry_id,
+            entry.options.get(CONF_SNAPSHOT_HOUR, DEFAULT_SNAPSHOT_HOUR),
+            entry.options.get(CONF_SNAPSHOT_MINUTE, DEFAULT_SNAPSHOT_MINUTE),
+        )
+        await snapshot_mgr.async_setup()
+        hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
+            "snapshot_manager": snapshot_mgr,
+        }
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -108,4 +130,8 @@ async def async_unload_entry(
     hass: HomeAssistant, entry: ParqetConfigEntry
 ) -> bool:
     """Unload a Parqet config entry."""
+    # Tear down snapshot manager if active.
+    if mgr_data := hass.data.get(DOMAIN, {}).pop(entry.entry_id, None):
+        await mgr_data["snapshot_manager"].async_teardown()
+
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

@@ -35,3 +35,11 @@ CONF_CURRENCY = "currency"
 # Options
 CONF_INTERVAL = "interval"
 CONF_SCAN_INTERVAL = "scan_interval"
+
+# Snapshot options
+CONF_SNAPSHOT_ENABLED = "snapshot_enabled"
+CONF_SNAPSHOT_HOUR = "snapshot_hour"
+CONF_SNAPSHOT_MINUTE = "snapshot_minute"
+DEFAULT_SNAPSHOT_HOUR = 22
+DEFAULT_SNAPSHOT_MINUTE = 0
+SNAPSHOT_RETENTION_DAYS = 7

@@ -13,6 +13,7 @@ import './components/loading-spinner';
 import './views/performance-view';
 import './views/holdings-view';
 import './views/activities-view';
+import './parqet-snapshot-card';
 
 // ─── Card registration ────────────────────────────────────────────────────────
 

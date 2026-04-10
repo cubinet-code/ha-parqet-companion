@@ -35,8 +35,13 @@ from .const import (
     CONF_PORTFOLIO_ID,
     CONF_PORTFOLIO_NAME,
     CONF_SCAN_INTERVAL,
+    CONF_SNAPSHOT_ENABLED,
+    CONF_SNAPSHOT_HOUR,
+    CONF_SNAPSHOT_MINUTE,
     DEFAULT_INTERVAL,
     DEFAULT_SCAN_INTERVAL_MIN,
+    DEFAULT_SNAPSHOT_HOUR,
+    DEFAULT_SNAPSHOT_MINUTE,
     DOMAIN,
     INTERVALS,
     MIN_SCAN_INTERVAL_MIN,
@@ -308,6 +313,15 @@ class ParqetOptionsFlowHandler(OptionsFlow):
         current_scan = self.config_entry.options.get(
             CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_MIN
         )
+        current_snapshot_enabled = self.config_entry.options.get(
+            CONF_SNAPSHOT_ENABLED, False
+        )
+        current_snapshot_hour = self.config_entry.options.get(
+            CONF_SNAPSHOT_HOUR, DEFAULT_SNAPSHOT_HOUR
+        )
+        current_snapshot_minute = self.config_entry.options.get(
+            CONF_SNAPSHOT_MINUTE, DEFAULT_SNAPSHOT_MINUTE
+        )
 
         interval_options = {v: v.upper() for v in INTERVALS}
 
@@ -321,6 +335,15 @@ class ParqetOptionsFlowHandler(OptionsFlow):
                     vol.Required(
                         CONF_SCAN_INTERVAL, default=current_scan
                     ): vol.All(vol.Coerce(int), vol.Range(min=MIN_SCAN_INTERVAL_MIN)),
+                    vol.Optional(
+                        CONF_SNAPSHOT_ENABLED, default=current_snapshot_enabled
+                    ): bool,
+                    vol.Optional(
+                        CONF_SNAPSHOT_HOUR, default=current_snapshot_hour
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=23)),
+                    vol.Optional(
+                        CONF_SNAPSHOT_MINUTE, default=current_snapshot_minute
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=59)),
                 }
             ),
         )
