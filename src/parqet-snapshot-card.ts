@@ -77,6 +77,51 @@ export class ParqetSnapshotCard extends LitElement {
     this._config = config;
   }
 
+  getCardSize(): number {
+    return 4;
+  }
+
+  static getConfigForm() {
+    return {
+      schema: [
+        {
+          name: 'device_id',
+          selector: {
+            device: {
+              integration: 'parqet',
+            },
+          },
+        },
+        {
+          name: 'currency_symbol',
+          selector: { text: {} },
+        },
+        {
+          name: 'holdings_limit',
+          selector: { number: { min: 1, max: 200, mode: 'box' } },
+        },
+        {
+          name: 'show_logo',
+          selector: { boolean: {} },
+        },
+        {
+          name: 'compact',
+          selector: { boolean: {} },
+        },
+      ],
+      computeLabel: (schema: { name: string }) => {
+        const labels: Record<string, string> = {
+          device_id: 'Portfolio (leave empty for auto-detect)',
+          currency_symbol: 'Currency Symbol',
+          holdings_limit: 'Holdings Limit',
+          show_logo: 'Show Holding Logos',
+          compact: 'Compact Mode',
+        };
+        return labels[schema.name] || schema.name;
+      },
+    };
+  }
+
   connectedCallback() {
     super.connectedCallback();
     this._discoverPortfolio();
@@ -213,7 +258,8 @@ export class ParqetSnapshotCard extends LitElement {
         ${this._data && !this._loading && !this._error ? (() => {
           const d = this._data!;
           const hasSnapshot = d.snapshot_date !== null;
-          const sorted = this._sorted();
+          const limit = this._config?.holdings_limit ?? 50;
+          const sorted = this._sorted().slice(0, limit);
 
           return html`
             ${hasSnapshot ? html`
