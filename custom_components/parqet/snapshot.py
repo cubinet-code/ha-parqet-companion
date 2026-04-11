@@ -57,13 +57,8 @@ class SnapshotManager:
         else:
             _LOGGER.debug("No stored snapshots found, starting fresh")
 
-        today = date.today().isoformat()
-        if today not in self._data["snapshots"]:
-            _LOGGER.debug("No snapshot for today (%s), taking initial snapshot", today)
-            await self.async_take_snapshot()
-        else:
-            _LOGGER.debug("Snapshot for today (%s) already exists, skipping", today)
-
+        # Only take snapshots when the daily timer fires — not on setup.
+        # This ensures consistent point-in-time captures at the configured time.
         self._unsub = async_track_time_change(
             self._hass,
             self._on_time,
@@ -88,10 +83,19 @@ class SnapshotManager:
             _LOGGER.exception("Failed to take daily snapshot")
 
     async def async_take_snapshot(self) -> dict[str, Any] | None:
-        """Capture current holdings from the coordinator and persist."""
-        data = self._coordinator.data
+        """Fetch fresh data from the API and persist a snapshot."""
+        _LOGGER.debug("Fetching fresh data for snapshot")
+        try:
+            data = await self._coordinator.api.async_get_performance(
+                [self._coordinator.portfolio_id],
+                "1d",
+            )
+        except Exception:
+            _LOGGER.exception("Failed to fetch data for snapshot")
+            return None
+
         if not data or "holdings" not in data:
-            _LOGGER.warning("No coordinator data available for snapshot")
+            _LOGGER.warning("No holdings in API response for snapshot")
             return None
 
         today = date.today()

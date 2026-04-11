@@ -36,14 +36,27 @@ MOCK_HOLDINGS = [
     },
 ]
 
+MOCK_API_RESPONSE = {
+    "holdings": MOCK_HOLDINGS,
+    "performance": {},
+}
+
 MOCK_COORDINATOR_DATA = {
     "holdings": MOCK_HOLDINGS,
 }
 
 
-def _make_coordinator(data: dict | None = None) -> MagicMock:
+def _make_coordinator(
+    data: dict | None = None,
+    api_response: dict | None = None,
+) -> MagicMock:
     coordinator = MagicMock()
     coordinator.data = data if data is not None else MOCK_COORDINATOR_DATA
+    coordinator.portfolio_id = "portfolio_123"
+    coordinator.api = MagicMock()
+    coordinator.api.async_get_performance = AsyncMock(
+        return_value=api_response if api_response is not None else MOCK_API_RESPONSE,
+    )
     return coordinator
 
 
@@ -54,13 +67,25 @@ def _make_hass() -> MagicMock:
 
 
 class TestTakeSnapshot:
-    """Test async_take_snapshot captures and persists holdings data."""
+    """Test async_take_snapshot fetches fresh data and persists."""
 
     @pytest.mark.asyncio
-    async def test_captures_holdings_from_coordinator(self) -> None:
-        hass = _make_hass()
+    async def test_makes_fresh_api_call(self) -> None:
         coordinator = _make_coordinator()
-        mgr = SnapshotManager(hass, coordinator, "entry1", 22, 0)
+        mgr = SnapshotManager(_make_hass(), coordinator, "entry1", 22, 0)
+        mgr._store = AsyncMock()
+        mgr._data = {"snapshots": {}}
+
+        await mgr.async_take_snapshot()
+
+        coordinator.api.async_get_performance.assert_called_once_with(
+            ["portfolio_123"], "1d"
+        )
+
+    @pytest.mark.asyncio
+    async def test_captures_holdings_from_api_response(self) -> None:
+        coordinator = _make_coordinator()
+        mgr = SnapshotManager(_make_hass(), coordinator, "entry1", 22, 0)
         mgr._store = AsyncMock()
         mgr._data = {"snapshots": {}}
 
@@ -74,9 +99,8 @@ class TestTakeSnapshot:
 
     @pytest.mark.asyncio
     async def test_persists_to_store(self) -> None:
-        hass = _make_hass()
         coordinator = _make_coordinator()
-        mgr = SnapshotManager(hass, coordinator, "entry1", 22, 0)
+        mgr = SnapshotManager(_make_hass(), coordinator, "entry1", 22, 0)
         mgr._store = AsyncMock()
         mgr._data = {"snapshots": {}}
 
@@ -89,9 +113,8 @@ class TestTakeSnapshot:
 
     @pytest.mark.asyncio
     async def test_records_total_value(self) -> None:
-        hass = _make_hass()
         coordinator = _make_coordinator()
-        mgr = SnapshotManager(hass, coordinator, "entry1", 22, 0)
+        mgr = SnapshotManager(_make_hass(), coordinator, "entry1", 22, 0)
         mgr._store = AsyncMock()
         mgr._data = {"snapshots": {}}
 
@@ -115,7 +138,7 @@ class TestTakeSnapshot:
                 "logo": None, "nickname": None,
             },
         ]
-        coordinator = _make_coordinator({"holdings": holdings})
+        coordinator = _make_coordinator(api_response={"holdings": holdings})
         mgr = SnapshotManager(_make_hass(), coordinator, "entry1", 22, 0)
         mgr._store = AsyncMock()
         mgr._data = {"snapshots": {}}
@@ -126,9 +149,23 @@ class TestTakeSnapshot:
         assert "h2" not in snapshot["holdings"]
 
     @pytest.mark.asyncio
-    async def test_skips_when_no_coordinator_data(self) -> None:
-        coordinator = MagicMock()
-        coordinator.data = None
+    async def test_returns_none_when_api_fails(self) -> None:
+        coordinator = _make_coordinator()
+        coordinator.api.async_get_performance = AsyncMock(
+            side_effect=Exception("API error")
+        )
+        mgr = SnapshotManager(_make_hass(), coordinator, "entry1", 22, 0)
+        mgr._store = AsyncMock()
+        mgr._data = {"snapshots": {}}
+
+        snapshot = await mgr.async_take_snapshot()
+
+        assert snapshot is None
+        mgr._store.async_save.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_no_holdings(self) -> None:
+        coordinator = _make_coordinator(api_response={"performance": {}})
         mgr = SnapshotManager(_make_hass(), coordinator, "entry1", 22, 0)
         mgr._store = AsyncMock()
         mgr._data = {"snapshots": {}}
@@ -144,12 +181,10 @@ class TestPruning:
 
     @pytest.mark.asyncio
     async def test_prunes_old_snapshots(self) -> None:
-        hass = _make_hass()
         coordinator = _make_coordinator()
-        mgr = SnapshotManager(hass, coordinator, "entry1", 22, 0)
+        mgr = SnapshotManager(_make_hass(), coordinator, "entry1", 22, 0)
         mgr._store = AsyncMock()
 
-        # Pre-populate with 10 days of snapshots
         mgr._data = {
             "snapshots": {
                 f"2026-03-{i:02d}": {
@@ -166,7 +201,6 @@ class TestPruning:
             mock_date.fromisoformat = date.fromisoformat
             await mgr.async_take_snapshot()
 
-        # 7-day retention: only March 4-10 + today should remain
         remaining = set(mgr._data["snapshots"].keys())
         assert "2026-03-01" not in remaining
         assert "2026-03-02" not in remaining
@@ -178,9 +212,7 @@ class TestGetSnapshotData:
     """Test get_snapshot_data computes daily P&L correctly."""
 
     def test_computes_daily_pl(self) -> None:
-        yesterday = (date.today().isoformat()
-                     if False else "2026-04-08")
-        today_str = "2026-04-09"
+        yesterday = "2026-04-08"
         coordinator = _make_coordinator()
         mgr = SnapshotManager(_make_hass(), coordinator, "entry1", 22, 0)
         mgr._data = {
@@ -234,7 +266,6 @@ class TestGetSnapshotData:
                     "taken_at": "2026-04-08T22:00:00+02:00",
                     "holdings": {
                         "holding_1": {"price": 50.0, "value": 5000.0, "shares": 100, "name": "Test Stock"},
-                        # holding_2 not present — new addition
                     },
                     "total_value": 5000.0,
                 }
@@ -260,7 +291,6 @@ class TestGetSnapshotData:
                 "2026-04-08": {
                     "taken_at": "2026-04-08T22:00:00+02:00",
                     "holdings": {
-                        # Only holding_1 existed yesterday at 5000
                         "holding_1": {"price": 50.0, "value": 5000.0, "shares": 100, "name": "Test Stock"},
                     },
                     "total_value": 5000.0,
@@ -273,10 +303,7 @@ class TestGetSnapshotData:
             mock_date.fromisoformat = date.fromisoformat
             result = mgr.get_snapshot_data()
 
-        # holding_1: 5500 - 5000 = 500 P&L
-        # holding_2: new, no baseline — excluded from total P&L
         assert result["total_daily_pl"] == 500.0
-        # total_value includes both holdings
         assert result["total_value"] == 11000.0
 
 
