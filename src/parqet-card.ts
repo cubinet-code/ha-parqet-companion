@@ -4,7 +4,7 @@
  */
 
 import { LitElement, html, css, PropertyValues } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { property, state } from 'lit/decorators.js';
 
 import type { Hass, ParqetCardConfig, ViewType, DiscoveredPortfolio, HassEntity } from './types';
 import { DOMAIN } from './const';
@@ -20,17 +20,18 @@ import './parqet-snapshot-card';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const w = window as any;
 w['customCards'] = w['customCards'] || [];
-w['customCards'].push({
-  type: 'parqet-companion-card',
-  name: 'Parqet Companion',
-  description: 'Display your Parqet portfolio data — performance, holdings and activities.',
-  preview: true,
-  documentationURL: 'https://github.com/cubinet-code/ha-parqet-companion',
-});
+if (!w['customCards'].some((c: { type: string }) => c.type === 'parqet-companion-card')) {
+  w['customCards'].push({
+    type: 'parqet-companion-card',
+    name: 'Parqet Companion',
+    description: 'Display your Parqet portfolio data — performance, holdings and activities.',
+    preview: true,
+    documentationURL: 'https://github.com/cubinet-code/ha-parqet-companion',
+  });
+}
 
 // ─── Card element ─────────────────────────────────────────────────────────────
 
-@customElement('parqet-companion-card')
 export class ParqetCompanionCard extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @state() private _config!: ParqetCardConfig;
@@ -420,4 +421,8 @@ export class ParqetCompanionCard extends LitElement {
     }
     .hint { font-size: 0.75rem; opacity: 0.7; }
   `;
+}
+
+if (!customElements.get('parqet-companion-card')) {
+  customElements.define('parqet-companion-card', ParqetCompanionCard);
 }

@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { property, state } from 'lit/decorators.js';
 import type {
   Hass,
   HassEntityRegistryDisplayEntry,
@@ -13,12 +13,14 @@ import './components/loading-spinner';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const w = window as any;
 w['customCards'] = w['customCards'] || [];
-w['customCards'].push({
-  type: 'parqet-snapshot-card',
-  name: 'Parqet Daily Snapshot',
-  description: 'Per-holding daily P&L based on custom snapshot time.',
-  preview: false,
-});
+if (!w['customCards'].some((c: { type: string }) => c.type === 'parqet-snapshot-card')) {
+  w['customCards'].push({
+    type: 'parqet-snapshot-card',
+    name: 'Parqet Daily Snapshot',
+    description: 'Per-holding daily P&L based on custom snapshot time.',
+    preview: false,
+  });
+}
 
 // ─── Snapshot response types ────────────────────────────────────────────────
 
@@ -61,7 +63,6 @@ interface SnapshotCardConfig {
 
 // ─── Card ───────────────────────────────────────────────────────────────────
 
-@customElement('parqet-snapshot-card')
 export class ParqetSnapshotCard extends LitElement {
   @property({ attribute: false }) hass!: Hass;
 
@@ -345,6 +346,10 @@ export class ParqetSnapshotCard extends LitElement {
     .error { margin: 8px 16px; padding: 8px 12px; background: rgba(244, 67, 54, 0.1); color: var(--error-color, #f44336); border-radius: 6px; font-size: 0.82rem; }
     .info { padding: 24px 16px; text-align: center; color: var(--secondary-text-color); font-size: 0.875rem; }
   `;
+}
+
+if (!customElements.get('parqet-snapshot-card')) {
+  customElements.define('parqet-snapshot-card', ParqetSnapshotCard);
 }
 
 declare global {
