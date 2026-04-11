@@ -54,6 +54,7 @@ interface SnapshotCardConfig {
   entity?: string;
   entry_id?: string;
   currency_symbol?: string;
+  holdings_limit?: number;
   show_logo?: boolean;
   compact?: boolean;
 }
