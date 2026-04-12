@@ -108,7 +108,8 @@ class TestTakeSnapshot:
 
         mgr._store.async_save.assert_called_once()
         saved_data = mgr._store.async_save.call_args[0][0]
-        today = date.today().isoformat()
+        from homeassistant.util import dt as dt_util
+        today = dt_util.now().date().isoformat()
         assert today in saved_data["snapshots"]
 
     @pytest.mark.asyncio
@@ -196,9 +197,8 @@ class TestPruning:
             }
         }
 
-        with patch("custom_components.parqet.snapshot.date") as mock_date:
-            mock_date.today.return_value = date(2026, 3, 10)
-            mock_date.fromisoformat = date.fromisoformat
+        with patch("custom_components.parqet.snapshot.dt_util") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 3, 10)
             await mgr.async_take_snapshot()
 
         remaining = set(mgr._data["snapshots"].keys())
@@ -228,9 +228,8 @@ class TestGetSnapshotData:
             }
         }
 
-        with patch("custom_components.parqet.snapshot.date") as mock_date:
-            mock_date.today.return_value = date(2026, 4, 9)
-            mock_date.fromisoformat = date.fromisoformat
+        with patch("custom_components.parqet.snapshot.dt_util") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 4, 9)
             result = mgr.get_snapshot_data()
 
         assert result["snapshot_date"] == yesterday
@@ -272,9 +271,8 @@ class TestGetSnapshotData:
             }
         }
 
-        with patch("custom_components.parqet.snapshot.date") as mock_date:
-            mock_date.today.return_value = date(2026, 4, 9)
-            mock_date.fromisoformat = date.fromisoformat
+        with patch("custom_components.parqet.snapshot.dt_util") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 4, 9)
             result = mgr.get_snapshot_data()
 
         h1 = next(h for h in result["holdings"] if h["id"] == "holding_1")
@@ -298,9 +296,8 @@ class TestGetSnapshotData:
             }
         }
 
-        with patch("custom_components.parqet.snapshot.date") as mock_date:
-            mock_date.today.return_value = date(2026, 4, 9)
-            mock_date.fromisoformat = date.fromisoformat
+        with patch("custom_components.parqet.snapshot.dt_util") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 4, 9)
             result = mgr.get_snapshot_data()
 
         assert result["total_daily_pl"] == 500.0

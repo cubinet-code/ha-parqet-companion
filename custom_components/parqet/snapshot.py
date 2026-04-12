@@ -9,6 +9,7 @@ from typing import Any
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from .const import SNAPSHOT_RETENTION_DAYS
 from .coordinator import ParqetDataUpdateCoordinator
@@ -84,6 +85,8 @@ class SnapshotManager:
 
     async def async_take_snapshot(self) -> dict[str, Any] | None:
         """Fetch fresh data from the API and persist a snapshot."""
+        # Use "1d" interval — position fields (currentPrice, currentValue, shares)
+        # are interval-independent, so any interval works. "1d" is the lightest.
         _LOGGER.debug("Fetching fresh data for snapshot")
         try:
             data = await self._coordinator.api.async_get_performance(
@@ -98,7 +101,7 @@ class SnapshotManager:
             _LOGGER.warning("No holdings in API response for snapshot")
             return None
 
-        today = date.today()
+        today = dt_util.now().date()
         today_str = today.isoformat()
 
         holdings_snapshot: dict[str, dict[str, Any]] = {}
@@ -132,11 +135,13 @@ class SnapshotManager:
     def _prune_old_snapshots(self, today: date) -> None:
         """Remove snapshots older than the retention period."""
         cutoff = today.toordinal() - SNAPSHOT_RETENTION_DAYS
-        to_remove = [
-            k
-            for k in self._data["snapshots"]
-            if date.fromisoformat(k).toordinal() <= cutoff
-        ]
+        to_remove = []
+        for k in self._data["snapshots"]:
+            try:
+                if date.fromisoformat(k).toordinal() <= cutoff:
+                    to_remove.append(k)
+            except ValueError:
+                to_remove.append(k)
         for k in to_remove:
             del self._data["snapshots"][k]
 
@@ -145,7 +150,7 @@ class SnapshotManager:
         data = self._coordinator.data or {}
         current_holdings = data.get("holdings", [])
 
-        today = date.today().isoformat()
+        today = dt_util.now().date().isoformat()
         prev_dates = sorted(
             (k for k in self._data["snapshots"] if k < today),
             reverse=True,
