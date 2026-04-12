@@ -137,6 +137,13 @@ class ParqetOAuth2FlowHandler(
 
         self._user_id = user_info.get("userId")
 
+        _LOGGER.debug(
+            "OAuth complete: user=%s, permissions=%s, portfolios=%s",
+            self._user_id,
+            [p.get("resourceId") for p in user_info.get("permissions", [])],
+            [f"{p.get('name')} ({p.get('id')})" for p in portfolios],
+        )
+
         if not portfolios:
             return self.async_abort(reason="no_portfolios")
 
