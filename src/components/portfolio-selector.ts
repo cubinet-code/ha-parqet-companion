@@ -1,8 +1,7 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { property } from 'lit/decorators.js';
 import type { Portfolio } from '../types';
 
-@customElement('parqet-portfolio-selector')
 export class ParqetPortfolioSelector extends LitElement {
   @property({ type: Array }) portfolios: Portfolio[] = [];
   @property() selected: string | null = null;
@@ -52,6 +51,10 @@ export class ParqetPortfolioSelector extends LitElement {
       outline-offset: 1px;
     }
   `;
+}
+
+if (!customElements.get('parqet-portfolio-selector')) {
+  customElements.define('parqet-portfolio-selector', ParqetPortfolioSelector);
 }
 
 declare global {

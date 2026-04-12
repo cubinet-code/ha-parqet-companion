@@ -1,5 +1,5 @@
 import { LitElement, html, css, svg } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { property } from 'lit/decorators.js';
 
 export interface StackedSegment {
   label: string;
@@ -10,7 +10,6 @@ export interface StackedSegment {
 const BAR_H = 18;
 const BAR_RX = 4;
 
-@customElement('parqet-stacked-bar')
 export class ParqetStackedBar extends LitElement {
   @property({ type: Array }) segments: StackedSegment[] = [];
   @property({ type: String }) currencySymbol = '€';
@@ -125,6 +124,10 @@ export class ParqetStackedBar extends LitElement {
       font-size: 0.82rem;
     }
   `;
+}
+
+if (!customElements.get('parqet-stacked-bar')) {
+  customElements.define('parqet-stacked-bar', ParqetStackedBar);
 }
 
 declare global {

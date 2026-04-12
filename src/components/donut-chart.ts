@@ -1,5 +1,5 @@
 import { LitElement, html, css, svg } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { property } from 'lit/decorators.js';
 
 export interface DonutSegment {
   label: string;
@@ -12,7 +12,6 @@ const STROKE = 28;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-@customElement('parqet-donut-chart')
 export class ParqetDonutChart extends LitElement {
   @property({ type: Array }) segments: DonutSegment[] = [];
   @property({ type: String }) centerLabel = '';
@@ -140,6 +139,10 @@ export class ParqetDonutChart extends LitElement {
       font-size: 0.82rem;
     }
   `;
+}
+
+if (!customElements.get('parqet-donut-chart')) {
+  customElements.define('parqet-donut-chart', ParqetDonutChart);
 }
 
 declare global {

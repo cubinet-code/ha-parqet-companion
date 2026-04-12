@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, Activity, ActivityType, Holding } from '../types';
 import { fmtCurrency, fmtDate } from '../utils';
 import '../components/loading-spinner';
@@ -29,7 +29,6 @@ const BADGE_COLORS: Record<string, string> = {
   withdrawal: '#f44336',
 };
 
-@customElement('parqet-activities-view')
 export class ParqetActivitiesView extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @property({ attribute: false }) portfolio!: DiscoveredPortfolio;
@@ -221,4 +220,8 @@ export class ParqetActivitiesView extends LitElement {
     .error { margin: 8px 16px; padding: 8px 12px; background: rgba(244, 67, 54, 0.1); color: var(--error-color, #f44336); border-radius: 6px; font-size: 0.82rem; }
     .empty { padding: 24px; text-align: center; color: var(--secondary-text-color); font-size: 0.875rem; }
   `;
+}
+
+if (!customElements.get('parqet-activities-view')) {
+  customElements.define('parqet-activities-view', ParqetActivitiesView);
 }

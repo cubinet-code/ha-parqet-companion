@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, Holding } from '../types';
 import type { IntervalValue } from '../const';
 import { fmtCurrency, fmtPct, valueClass } from '../utils';
@@ -14,7 +14,6 @@ const CHART_COLORS = [
   '#009688', '#ffc107', '#673ab7', '#03a9f4', '#ff9800',
 ];
 
-@customElement('parqet-holdings-view')
 export class ParqetHoldingsView extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @property({ attribute: false }) portfolio!: DiscoveredPortfolio;
@@ -214,4 +213,8 @@ export class ParqetHoldingsView extends LitElement {
     .error { margin: 8px 16px; padding: 8px 12px; background: rgba(244, 67, 54, 0.1); color: var(--error-color, #f44336); border-radius: 6px; font-size: 0.82rem; }
     .empty { padding: 24px; text-align: center; color: var(--secondary-text-color); font-size: 0.875rem; }
   `;
+}
+
+if (!customElements.get('parqet-holdings-view')) {
+  customElements.define('parqet-holdings-view', ParqetHoldingsView);
 }

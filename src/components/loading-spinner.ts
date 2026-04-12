@@ -1,7 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { customElement } from 'lit/decorators.js';
 
-@customElement('parqet-loading-spinner')
 export class ParqetLoadingSpinner extends LitElement {
   render() {
     return html`
@@ -32,6 +30,10 @@ export class ParqetLoadingSpinner extends LitElement {
       }
     }
   `;
+}
+
+if (!customElements.get('parqet-loading-spinner')) {
+  customElements.define('parqet-loading-spinner', ParqetLoadingSpinner);
 }
 
 declare global {

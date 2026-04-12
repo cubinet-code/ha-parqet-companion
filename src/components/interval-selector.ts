@@ -1,9 +1,8 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { property } from 'lit/decorators.js';
 import { INTERVALS } from '../const';
 import type { IntervalValue } from '../const';
 
-@customElement('parqet-interval-selector')
 export class ParqetIntervalSelector extends LitElement {
   @property() selected: IntervalValue = '1y';
 
@@ -68,6 +67,10 @@ export class ParqetIntervalSelector extends LitElement {
       outline-offset: 1px;
     }
   `;
+}
+
+if (!customElements.get('parqet-interval-selector')) {
+  customElements.define('parqet-interval-selector', ParqetIntervalSelector);
 }
 
 declare global {

@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, PortfolioPerformance } from '../types';
 import type { IntervalValue } from '../const';
 import type { StackedSegment } from '../components/stacked-bar';
@@ -8,7 +8,6 @@ import '../components/interval-selector';
 import '../components/loading-spinner';
 import '../components/stacked-bar';
 
-@customElement('parqet-performance-view')
 export class ParqetPerformanceView extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @property({ attribute: false }) portfolio!: DiscoveredPortfolio;
@@ -170,4 +169,8 @@ export class ParqetPerformanceView extends LitElement {
     .error { margin: 8px 16px; padding: 8px 12px; background: rgba(244, 67, 54, 0.1); color: var(--error-color, #f44336); border-radius: 6px; font-size: 0.82rem; }
     .empty { padding: 24px; text-align: center; color: var(--secondary-text-color); font-size: 0.875rem; }
   `;
+}
+
+if (!customElements.get('parqet-performance-view')) {
+  customElements.define('parqet-performance-view', ParqetPerformanceView);
 }
