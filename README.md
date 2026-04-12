@@ -19,8 +19,9 @@ A Home Assistant integration for [Parqet](https://www.parqet.com) — the portfo
 - **Multi-portfolio support** — track multiple portfolios from a single Parqet account
 - **Lovelace companion card** with three views:
   - **Performance** — KPI grid, interval selector (1D to Max), stacked breakdown chart
-  - **Holdings** — donut allocation chart, sortable table with logos, expandable detail rows
+  - **Holdings** — donut allocation chart, sortable table with logos, expandable detail rows, interval-aware P&L
   - **Activities** — filtered transaction list with pagination
+- **Daily Snapshot card** — per-holding daily P&L based on a custom snapshot time, independent of Parqet's 1D interval
 - **Calendar entity** — portfolio activities (buy/sell/dividend) as calendar events
 - **Visual card editor** — configure everything through the HA UI
 - **On-demand data** — switch intervals and fetch fresh data via WebSocket API
@@ -217,9 +218,42 @@ All options are configurable through the HA visual editor — no YAML required.
   <img src="https://raw.githubusercontent.com/cubinet-code/ha-parqet-companion/main/docs/screenshots/activities.png" alt="Activities View" width="700">
 </p>
 
+## Daily Snapshot Card
+
+A standalone card that captures per-holding closing prices at a user-configured time and computes daily P&L independently of Parqet's built-in 1D interval.
+
+**Why?** Parqet's 1D interval uses the XETRA close (17:00) as the reference price, even for US stocks trading until 22:00. The snapshot card lets you set your own closing time (e.g., 22:00 after US market close) for accurate daily performance.
+
+### Setup
+
+1. Go to **Settings > Integrations > Parqet > Configure**
+2. Enable **Daily snapshots** and set your preferred snapshot time
+3. Restart Home Assistant
+4. Add the **Parqet Daily Snapshot** card to any dashboard
+
+Daily P&L is shown starting the day after the first snapshot is taken.
+
+### Snapshot Card Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `device_id` | string | — | Lock card to a specific portfolio device |
+| `currency_symbol` | string | `€` | Currency symbol for formatting |
+| `holdings_limit` | number | `50` | Maximum holdings shown in table |
+| `show_logo` | boolean | `true` | Show holding logos |
+| `compact` | boolean | `false` | Compact layout |
+
+### Integration Options (Snapshots)
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `snapshot_enabled` | boolean | `false` | Enable daily snapshots |
+| `snapshot_hour` | number | `22` | Snapshot hour (0-23) |
+| `snapshot_minute` | number | `0` | Snapshot minute (0-59) |
+
 ## WebSocket API
 
-Three WebSocket commands are available for advanced use cases and custom cards.
+Six WebSocket commands are available for advanced use cases and custom cards.
 
 ### `parqet/get_performance`
 
@@ -255,6 +289,39 @@ Fetch activities with optional filtering and pagination.
   "activity_type": ["buy", "sell"],
   "limit": 50,
   "cursor": null
+}
+```
+
+### `parqet/get_snapshot`
+
+Returns daily P&L data computed from stored snapshots.
+
+```json
+{
+  "type": "parqet/get_snapshot",
+  "entry_id": "<config_entry_id>"
+}
+```
+
+### `parqet/take_snapshot`
+
+Manually trigger a snapshot capture.
+
+```json
+{
+  "type": "parqet/take_snapshot",
+  "entry_id": "<config_entry_id>"
+}
+```
+
+### `parqet/purge_snapshots`
+
+Clear all stored snapshot data.
+
+```json
+{
+  "type": "parqet/purge_snapshots",
+  "entry_id": "<config_entry_id>"
 }
 ```
 
