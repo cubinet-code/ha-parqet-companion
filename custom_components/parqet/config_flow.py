@@ -84,7 +84,7 @@ class ParqetOAuth2FlowHandler(
     @property
     def extra_authorize_data(self) -> dict[str, Any]:
         """Extra data to include in the authorize URL."""
-        return {"scope": SCOPES}
+        return {"scope": SCOPES, "prompt": "consent"}
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
