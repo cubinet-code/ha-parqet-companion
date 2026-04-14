@@ -3,7 +3,7 @@ import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, PortfolioPerformance } from '../types';
 import type { IntervalValue } from '../const';
 import type { StackedSegment } from '../components/stacked-bar';
-import { fmtCurrency, fmtPct, valueClass, parseState } from '../utils';
+import { fmtCurrency, fmtPct, valueClass } from '../utils';
 import '../components/interval-selector';
 import '../components/loading-spinner';
 import '../components/stacked-bar';
@@ -18,63 +18,25 @@ export class ParqetPerformanceView extends LitElement {
   @state() private _loading = false;
   @state() private _error = '';
 
+  _fetchGen = 0;
+
   connectedCallback() {
     super.connectedCallback();
     this._interval = (this.config?.default_interval as IntervalValue) ?? '1y';
+    void this._load();
+  }
+
+  updated(changed: Map<string, unknown>) {
+    if (changed.has('portfolio')) void this._load();
   }
 
   private _sym(): string {
     return this.config?.currency_symbol ?? '€';
   }
 
-  /** Get performance data — from WS if interval was changed, else from sensors. */
-  private _getData(): PortfolioPerformance | null {
-    if (this._wsData) return this._wsData;
-
-    // Build from sensor states.
-    const s = this.portfolio.sensors;
-    const val = (key: string) => parseState(s[key]?.state);
-
-    const totalValue = val('total_value');
-    if (totalValue == null) return null;
-
-    return {
-      kpis: { inInterval: { xirr: val('xirr'), ttwror: val('ttwror') } },
-      fees: { inInterval: { fees: val('fees') ?? 0 } },
-      taxes: { inInterval: { taxes: val('taxes') ?? 0 } },
-      unrealizedGains: {
-        inInterval: {
-          gainGross: val('unrealized_gain') ?? 0,
-          gainNet: val('unrealized_gain_net') ?? 0,
-          returnGross: val('unrealized_return_gross') ?? 0,
-          returnNet: val('unrealized_return_net') ?? 0,
-        },
-      },
-      realizedGains: {
-        inInterval: {
-          gainGross: val('realized_gain') ?? 0,
-          gainNet: val('realized_gain_net') ?? 0,
-          returnGross: val('realized_return_gross') ?? 0,
-          returnNet: val('realized_return_net') ?? 0,
-        },
-      },
-      dividends: {
-        inInterval: {
-          gainGross: val('dividends') ?? 0,
-          gainNet: val('dividends_net') ?? 0,
-          taxes: val('dividends_taxes') ?? 0,
-          fees: val('dividends_fees') ?? 0,
-        },
-      },
-      valuation: {
-        atIntervalStart: val('valuation_start') ?? 0,
-        atIntervalEnd: totalValue,
-      },
-    };
-  }
-
-  private async _onIntervalChange(e: CustomEvent) {
-    this._interval = e.detail.interval as IntervalValue;
+  private async _load() {
+    if (!this.hass || !this.portfolio) return;
+    const gen = ++this._fetchGen;
     this._loading = true;
     this._error = '';
 
@@ -84,17 +46,24 @@ export class ParqetPerformanceView extends LitElement {
         entry_id: this.portfolio.entryId,
         interval: this._interval,
       })) as { performance: PortfolioPerformance };
+      if (gen !== this._fetchGen) return;
       this._wsData = result.performance;
-    } catch (e) {
+    } catch {
+      if (gen !== this._fetchGen) return;
       this._error = 'Failed to load performance data';
       this._wsData = null;
     } finally {
-      this._loading = false;
+      if (gen === this._fetchGen) this._loading = false;
     }
   }
 
+  async _onIntervalChange(e: CustomEvent) {
+    this._interval = e.detail.interval as IntervalValue;
+    return this._load();
+  }
+
   render() {
-    const d = this._getData();
+    const d = this._wsData;
 
     return html`
       ${this.config?.show_interval_selector !== false ? html`

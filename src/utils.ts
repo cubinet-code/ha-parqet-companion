@@ -39,12 +39,3 @@ export function fmtDate(iso: string): string {
     return iso;
   }
 }
-
-/**
- * Parse a sensor state string to a number, returning null for unavailable/unknown.
- */
-export function parseState(state: string | undefined): number | null {
-  if (!state || state === 'unavailable' || state === 'unknown') return null;
-  const n = parseFloat(state);
-  return isNaN(n) ? null : n;
-}
