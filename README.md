@@ -175,8 +175,7 @@ compact: false
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `device_id` | string | — | Lock card to a specific portfolio device |
-| `entity` | string | — | Lock card to a specific portfolio (pick any Parqet sensor) |
+| `device_id` | string | — | Lock card to a specific portfolio device (leave empty for auto-detect) |
 | `default_view` | string | `performance` | Initial tab: `performance`, `holdings`, or `activities` |
 | `default_interval` | string | `1y` | Default performance interval |
 | `currency_symbol` | string | `€` | Currency symbol for formatting |
@@ -351,7 +350,7 @@ logger:
 | "Missing configuration" during setup | Ensure you've restarted HA after installing the integration — OAuth registers on first load |
 | Sensors show "unavailable" | Check that your Parqet OAuth token hasn't expired; re-authenticate in integration settings |
 | Card shows "No Parqet portfolios found" | Ensure the integration is set up with at least one portfolio |
-| Holdings/Activities fail to load | Delete and re-add the integration to refresh entity attributes |
+| Performance/Holdings/Activities show blank on first load | Update to v0.3.5+ — all card views now load data via WebSocket on render |
 
 ### Diagnostics
 
