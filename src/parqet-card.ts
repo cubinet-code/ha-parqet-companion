@@ -39,6 +39,7 @@ export class ParqetCompanionCard extends LitElement {
   @state() private _portfolios: DiscoveredPortfolio[] = [];
   @state() private _selectedIndex = 0;
   @state() private _activeView: ViewType = 'performance';
+  private _lastEntities: Hass['entities'] | undefined;
 
   // ─── HA card API ──────────────────────────────────────────────────────────
 
@@ -225,12 +226,16 @@ export class ParqetCompanionCard extends LitElement {
 
   private _discoverPortfolios() {
     if (!this.hass?.states) return;
+    // Skip if entity registry hasn't changed — avoids scanning on every state update
+    if (this.hass.entities === this._lastEntities) return;
+    this._lastEntities = this.hass.entities;
 
     const deviceId = this._config?.device_id;
     const discovered = discoverPortfolios(this.hass, deviceId);
 
-    if (JSON.stringify(discovered.map((p) => p.entryId)) !==
-        JSON.stringify(this._portfolios.map((p) => p.entryId))) {
+    // Sort before comparing to avoid false positives from iteration order changes
+    const key = (ps: DiscoveredPortfolio[]) => [...ps.map((p) => p.entryId)].sort().join(',');
+    if (key(discovered) !== key(this._portfolios)) {
       this._portfolios = discovered;
     }
   }

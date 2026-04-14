@@ -150,6 +150,6 @@ export interface ParqetCardConfig {
 export interface DiscoveredPortfolio {
   entryId: string;
   name: string;
-  entityPrefix: string; // e.g. "sensor.retirement"
+  entityPrefix: string | null; // null when discovered via entity registry
   sensors: Record<string, HassEntity>;
 }

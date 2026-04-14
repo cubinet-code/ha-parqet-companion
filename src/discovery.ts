@@ -83,7 +83,7 @@ function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfoli
     portfolios.push({
       entryId,
       name,
-      entityPrefix: '', // not meaningful with registry-based discovery
+      entityPrefix: null,
       sensors,
     });
   }
@@ -91,22 +91,25 @@ function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfoli
   return portfolios;
 }
 
-function _discoverViaStateScan(hass: Hass, deviceId?: string): DiscoveredPortfolio[] {
+// deviceId filtering is not supported in the fallback path — no entity registry
+// means no device information is available. All portfolios are returned.
+function _discoverViaStateScan(hass: Hass, _deviceId?: string): DiscoveredPortfolio[] {
   const portfolioMap = new Map<string, DiscoveredPortfolio>();
+  const prefixLen = '_total_value'.length;
 
   for (const [entityId, entity] of Object.entries(hass.states)) {
     if (!entityId.startsWith('sensor.') || !entityId.includes('_total_value')) continue;
 
     const attrs = entity.attributes as Record<string, unknown>;
-    const prefix = entityId.replace('_total_value', '');
+    const prefix = entityId.slice(0, entityId.length - prefixLen);
 
     // Build sensors dict (keys from entity ID suffix — may be translated, but
     // this is the best we can do without the entity registry)
+    const prefixUnderscore = prefix + '_';
     const sensors: Record<string, HassEntity> = {};
     for (const [sid, sentity] of Object.entries(hass.states)) {
-      if (sid.startsWith(prefix + '_')) {
-        const key = sid.replace(prefix + '_', '');
-        sensors[key] = sentity;
+      if (sid.startsWith(prefixUnderscore)) {
+        sensors[sid.slice(prefixUnderscore.length)] = sentity;
       }
     }
 
