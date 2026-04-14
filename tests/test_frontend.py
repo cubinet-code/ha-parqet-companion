@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from custom_components.parqet.frontend import (
     CARD_JS_URL,
     _async_register_lovelace_resource,
+    async_register_frontend,
 )
 
 
@@ -115,3 +116,52 @@ class TestAsyncRegisterLovelaceResource:
         await _async_register_lovelace_resource(hass, VERSIONED_URL)
 
         assert call_order.index("load") < call_order.index("items")
+
+
+class TestAsyncRegisterFrontend:
+    """Tests for async_register_frontend — verifies coroutines are properly awaited."""
+
+    @pytest.mark.asyncio
+    async def test_lovelace_registration_is_scheduled_as_task(self) -> None:
+        """async_at_started callback must schedule the coroutine via async_create_task.
+
+        Regression test for: RuntimeWarning: coroutine '_async_register_lovelace_resource'
+        was never awaited. The callback passed to async_at_started must be a sync function
+        that schedules the coroutine — not a lambda that returns an unawaited coroutine.
+        """
+        scheduled_coros: list[str] = []
+        at_start_callbacks: list = []
+
+        hass = MagicMock(spec=HomeAssistant)
+        hass.async_add_executor_job = AsyncMock(return_value="0.3.3")
+        hass.http = MagicMock()
+        hass.http.async_register_static_paths = AsyncMock()
+        hass.is_running = True
+
+        def capture_create_task(coro, **kwargs):
+            scheduled_coros.append(type(coro).__name__)
+            # Close the coroutine to avoid ResourceWarning
+            coro.close()
+
+        hass.async_create_task = MagicMock(side_effect=capture_create_task)
+
+        def capture_at_started(h, cb):
+            at_start_callbacks.append(cb)
+
+        with (
+            patch("custom_components.parqet.frontend.CARD_JS_PATH") as mock_path,
+            patch("custom_components.parqet.frontend.add_extra_js_url"),
+            patch("custom_components.parqet.frontend.async_at_started", side_effect=capture_at_started),
+        ):
+            mock_path.exists.return_value = True
+            await async_register_frontend(hass)
+
+        assert len(at_start_callbacks) == 1, "Expected exactly one async_at_started registration"
+
+        # Call the registered callback — it must schedule a task, not return a coroutine
+        at_start_callbacks[0](hass)
+
+        assert len(scheduled_coros) == 1, (
+            "Expected async_create_task to be called once — "
+            "the callback must schedule the coroutine, not return it unawaited"
+        )

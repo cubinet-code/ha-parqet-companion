@@ -9,7 +9,7 @@ from typing import Any
 
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.start import async_at_started
 
 _LOGGER = logging.getLogger(__name__)
@@ -94,9 +94,15 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     # Primary: register as a proper Lovelace resource once HA has fully started.
     # This ensures the card JS is loaded synchronously by Lovelace before any
     # dashboard renders, bypassing service-worker HTML caching issues.
-    async_at_started(
-        hass,
-        lambda h: _async_register_lovelace_resource(h, versioned_url),
-    )
+    # async_at_started expects a sync callback — use async_create_task to
+    # schedule the coroutine rather than returning it unawaited.
+    @callback
+    def _schedule_lovelace_registration(hass_instance: HomeAssistant) -> None:
+        hass_instance.async_create_task(
+            _async_register_lovelace_resource(hass_instance, versioned_url),
+            eager_start=True,
+        )
+
+    async_at_started(hass, _schedule_lovelace_registration)
 
     _LOGGER.debug("Registered Parqet card frontend at %s", versioned_url)
