@@ -20,6 +20,7 @@ export interface HassEntityRegistryDisplayEntry {
   entity_id: string;
   device_id?: string;
   platform: string;
+  unique_id?: string;
 }
 
 export interface Hass {

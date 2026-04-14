@@ -8,6 +8,7 @@ import { property, state } from 'lit/decorators.js';
 
 import type { Hass, ParqetCardConfig, ViewType, DiscoveredPortfolio, HassEntity } from './types';
 import { DOMAIN } from './const';
+import { discoverPortfolios } from './discovery';
 
 import './components/loading-spinner';
 import './views/performance-view';
@@ -225,81 +226,11 @@ export class ParqetCompanionCard extends LitElement {
   private _discoverPortfolios() {
     if (!this.hass?.states) return;
 
-    // Index entity registry by entity_id for O(1) lookups below.
-    const entityRegistry = this.hass.entities
-      ? new Map(Object.values(this.hass.entities).map((e) => [e.entity_id, e]))
-      : null;
+    const deviceId = this._config?.device_id;
+    const discovered = discoverPortfolios(this.hass, deviceId);
 
-    let deviceEntityIds: Set<string> | null = null;
-    const configuredDeviceId = this._config?.device_id;
-    if (configuredDeviceId && entityRegistry) {
-      deviceEntityIds = new Set<string>();
-      for (const entry of entityRegistry.values()) {
-        if (entry.device_id === configuredDeviceId) {
-          deviceEntityIds.add(entry.entity_id);
-        }
-      }
-    }
-
-    // Legacy: support old configs that used an entity selector.
-    let legacyPrefix: string | null = null;
-    if (!configuredDeviceId && this._config?.entity) {
-      const parts = this._config.entity.replace('sensor.', '').split('_');
-      for (let i = parts.length; i > 0; i--) {
-        const candidate = 'sensor.' + parts.slice(0, i).join('_');
-        if (this.hass.states[candidate + '_total_value']) {
-          legacyPrefix = candidate;
-          break;
-        }
-      }
-    }
-
-    const portfolioMap = new Map<string, DiscoveredPortfolio>();
-
-    for (const [entityId, entity] of Object.entries(this.hass.states)) {
-      if (!entityId.startsWith('sensor.') || !entityId.includes('_total_value')) continue;
-
-      const attrs = entity.attributes as Record<string, unknown>;
-      const prefix = entityId.replace('_total_value', '');
-
-      if (deviceEntityIds && !deviceEntityIds.has(entityId)) continue;
-      if (legacyPrefix && prefix !== legacyPrefix) continue;
-
-      // Prefer the device name from the registry over deriving from entity ID.
-      let name: string | null = null;
-      const regEntry = entityRegistry?.get(entityId);
-      if (regEntry?.device_id && this.hass.devices) {
-        name = this.hass.devices[regEntry.device_id]?.name ?? null;
-      }
-      if (!name) {
-        name = (prefix.replace('sensor.', '') || 'Portfolio')
-          .split('_')
-          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(' ');
-      }
-
-      const sensors: Record<string, HassEntity> = {};
-      for (const [sid, sentity] of Object.entries(this.hass.states)) {
-        if (sid.startsWith(prefix + '_')) {
-          const key = sid.replace(prefix + '_', '');
-          sensors[key] = sentity;
-        }
-      }
-
-      if (Object.keys(sensors).length >= 3) {
-        const entryId = (attrs['entry_id'] as string) || prefix;
-        portfolioMap.set(prefix, {
-          entryId,
-          name,
-          entityPrefix: prefix,
-          sensors,
-        });
-      }
-    }
-
-    const discovered = Array.from(portfolioMap.values());
-    if (JSON.stringify(discovered.map((p) => p.entityPrefix)) !==
-        JSON.stringify(this._portfolios.map((p) => p.entityPrefix))) {
+    if (JSON.stringify(discovered.map((p) => p.entryId)) !==
+        JSON.stringify(this._portfolios.map((p) => p.entryId))) {
       this._portfolios = discovered;
     }
   }

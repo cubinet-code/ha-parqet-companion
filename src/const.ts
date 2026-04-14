@@ -18,3 +18,24 @@ export const INTERVALS = [
 export type IntervalValue = (typeof INTERVALS)[number]['value'];
 
 export const PARQET_BRAND_COLOR = '#009991';
+
+// All sensor keys as defined in sensor.py SENSOR_DESCRIPTIONS.
+// These are the unique_id suffixes and sensors dict keys — never translated.
+export const PARQET_SENSOR_KEYS = [
+  'total_value', 'xirr', 'ttwror', 'unrealized_gain', 'realized_gain',
+  'dividends', 'fees', 'taxes', 'valuation_start', 'unrealized_gain_net',
+  'unrealized_return_gross', 'unrealized_return_net', 'realized_gain_net',
+  'realized_return_gross', 'realized_return_net', 'dividends_net',
+  'dividends_taxes', 'dividends_fees', 'holdings_count', 'net_allocation',
+  'positive_allocation', 'negative_allocation',
+] as const;
+
+export type ParqetSensorKey = (typeof PARQET_SENSOR_KEYS)[number];
+
+/** Extract the sensor key from a unique_id like "{portfolio_id}_{key}". */
+export function sensorKeyFromUniqueId(uniqueId: string): ParqetSensorKey | null {
+  for (const key of PARQET_SENSOR_KEYS) {
+    if (uniqueId.endsWith('_' + key)) return key;
+  }
+  return null;
+}

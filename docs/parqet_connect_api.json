@@ -90,7 +90,6 @@
             "name": "limit",
             "required": false,
             "in": "query",
-            "x-nestjs_zod-has-null": true,
             "schema": {
               "minimum": 1,
               "maximum": 500,
@@ -102,7 +101,6 @@
             "name": "cursor",
             "required": false,
             "in": "query",
-            "x-nestjs_zod-has-null": true,
             "schema": {
               "default": null,
               "anyOf": [
@@ -120,7 +118,6 @@
             "required": false,
             "in": "query",
             "description": "If provided, only activities of the specified type(s) will be returned. If not provided, all activity types will be returned.",
-            "x-nestjs_zod-has-null": true,
             "schema": {
               "anyOf": [
                 {
@@ -163,7 +160,6 @@
             "required": false,
             "in": "query",
             "description": "If provided, only activities for holdings of the specified asset type(s) will be returned. If not provided, all activities are returned",
-            "x-nestjs_zod-has-null": true,
             "schema": {
               "anyOf": [
                 {
@@ -200,7 +196,6 @@
             "required": false,
             "in": "query",
             "description": "If provided, only activities for holdings of the specified id(s) will be returned. If not provided, all activities are returned",
-            "x-nestjs_zod-has-null": true,
             "schema": {
               "anyOf": [
                 {
@@ -725,7 +720,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -907,7 +901,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -1086,7 +1079,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -1265,7 +1257,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -1444,7 +1435,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -1623,7 +1613,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -1863,7 +1852,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -2183,7 +2171,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -2495,7 +2482,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -2803,7 +2789,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -3111,7 +3096,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -3431,7 +3415,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -3743,7 +3726,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -4051,7 +4033,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -4359,7 +4340,6 @@
                         "PEN",
                         "PHP",
                         "PLN",
-                        "RMB",
                         "RUB",
                         "SAR",
                         "SEK",
@@ -4677,7 +4657,6 @@
                     "PEN",
                     "PHP",
                     "PLN",
-                    "RMB",
                     "RUB",
                     "SAR",
                     "SEK",
@@ -4837,7 +4816,6 @@
                     "PEN",
                     "PHP",
                     "PLN",
-                    "RMB",
                     "RUB",
                     "SAR",
                     "SEK",
@@ -4942,7 +4920,6 @@
               "PEN",
               "PHP",
               "PLN",
-              "RMB",
               "RUB",
               "SAR",
               "SEK",
@@ -5546,6 +5523,15 @@
                           "type": "string",
                           "const": "commodity"
                         },
+                        "identifier": {
+                          "type": "string",
+                          "enum": [
+                            "gold",
+                            "silver",
+                            "platinum",
+                            "palladium"
+                          ]
+                        },
                         "name": {
                           "type": "string"
                         },
@@ -5565,6 +5551,7 @@
                       },
                       "required": [
                         "type",
+                        "identifier",
                         "name",
                         "unit",
                         "amount",

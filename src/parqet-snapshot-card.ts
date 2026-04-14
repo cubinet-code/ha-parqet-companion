@@ -2,10 +2,10 @@ import { LitElement, html, css } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import type {
   Hass,
-  HassEntityRegistryDisplayEntry,
   DiscoveredPortfolio,
 } from './types';
 import { fmtCurrency, fmtPct, valueClass } from './utils';
+import { discoverPortfolios } from './discovery';
 import './components/loading-spinner';
 
 // ─── Card registration ──────────────────────────────────────────────────────
@@ -138,45 +138,12 @@ export class ParqetSnapshotCard extends LitElement {
   private _discoverPortfolio() {
     if (!this.hass?.states) return;
 
-    const entityRegistry = this.hass.entities
-      ? new Map(Object.values(this.hass.entities).map((e: HassEntityRegistryDisplayEntry) => [e.entity_id, e]))
-      : null;
+    const deviceId = this._config?.device_id;
+    const portfolios = discoverPortfolios(this.hass, deviceId);
+    if (portfolios.length === 0) return;
 
-    let deviceEntityIds: Set<string> | null = null;
-    const configuredDeviceId = this._config?.device_id;
-    if (configuredDeviceId && entityRegistry) {
-      deviceEntityIds = new Set<string>();
-      for (const entry of entityRegistry.values()) {
-        if (entry.device_id === configuredDeviceId) {
-          deviceEntityIds.add(entry.entity_id);
-        }
-      }
-    }
-
-    for (const [entityId, entity] of Object.entries(this.hass.states)) {
-      if (!entityId.endsWith('_total_value')) continue;
-      const attrs = entity.attributes as Record<string, unknown>;
-      const prefix = entityId.replace('_total_value', '');
-
-      if (deviceEntityIds && !deviceEntityIds.has(entityId)) continue;
-
-      let name: string | null = null;
-      const regEntry = entityRegistry?.get(entityId);
-      if (regEntry?.device_id && this.hass.devices) {
-        name = this.hass.devices[regEntry.device_id]?.name ?? null;
-      }
-      if (!name) {
-        name = (prefix.replace('sensor.', '') || 'Portfolio')
-          .split('_')
-          .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(' ');
-      }
-
-      const entryId = (attrs['entry_id'] as string) || prefix;
-      this._portfolio = { entryId, name, entityPrefix: prefix, sensors: {} };
-      void this._load();
-      return;
-    }
+    this._portfolio = portfolios[0];
+    void this._load();
   }
 
   async _load() {
