@@ -2,7 +2,7 @@ import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, Activity, ActivityType, Holding } from '../types';
-import { fmtCurrency, fmtDate, getEntryIds } from '../utils';
+import { fmtCurrency, fmtDate, getEntryIds, isRateLimitError } from '../utils';
 import '../components/loading-spinner';
 
 const ACTIVITY_TYPES: { value: string; label: string }[] = [
@@ -134,7 +134,7 @@ export class ParqetActivitiesView extends LitElement {
       this._cursor = this._isAggregated() ? null : singleCursor;
       this._hasMore = !this._isAggregated() && !!singleCursor;
     } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'rate_limited') {
+      if (isRateLimitError(err)) {
         this._error = 'API rate limit reached — data will refresh automatically';
       } else {
         this._error = 'Failed to load activities';

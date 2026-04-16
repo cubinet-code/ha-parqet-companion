@@ -50,6 +50,14 @@ export function getEntryIds(portfolio: { entryId: string; _entryIds?: string[] }
 }
 
 /**
+ * Check if a WS error is a rate-limit response.
+ */
+export function isRateLimitError(err: unknown): boolean {
+  return !!err && typeof err === 'object' && 'code' in err
+    && (err as { code: string }).code === 'rate_limited';
+}
+
+/**
  * Format a date string to a localized short date.
  */
 export function fmtDate(iso: string): string {

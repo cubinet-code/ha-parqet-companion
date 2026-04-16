@@ -12,7 +12,7 @@ import type { Hass, ParqetCardConfig, ViewType, DiscoveredPortfolio, PortfolioPe
 import type { IntervalValue } from './const';
 import { DOMAIN } from './const';
 import { discoverPortfolios } from './discovery';
-import { buildPerformanceMsg } from './utils';
+import { buildPerformanceMsg, isRateLimitError } from './utils';
 
 import './components/loading-spinner';
 import './views/performance-view';
@@ -51,6 +51,8 @@ export class ParqetCompanionCard extends LitElement {
   @state() private _rateLimited = false;
   private _lastEntities: Hass['entities'] | undefined;
   private _fetchGen = 0;
+  private _cachedProxy: DiscoveredPortfolio | null = null;
+  private _cachedProxySource: DiscoveredPortfolio[] | null = null;
 
   // ─── HA card API ──────────────────────────────────────────────────────────
 
@@ -381,7 +383,7 @@ export class ParqetCompanionCard extends LitElement {
       );
     } catch (err: unknown) {
       if (gen !== this._fetchGen) return;
-      if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'rate_limited') {
+      if (isRateLimitError(err)) {
         this._rateLimited = true;
         this._dataError = (err as { message?: string }).message || 'Rate limit exceeded';
       } else {
@@ -400,13 +402,18 @@ export class ParqetCompanionCard extends LitElement {
   }
 
   private _allPortfoliosProxy(): DiscoveredPortfolio {
-    return {
+    if (this._cachedProxySource === this._portfolios && this._cachedProxy) {
+      return this._cachedProxy;
+    }
+    this._cachedProxy = {
       entryId: '__all__',
       name: 'All Portfolios',
       entityPrefix: null,
       sensors: {},
       _entryIds: this._portfolios.map((p) => p.entryId),
     };
+    this._cachedProxySource = this._portfolios;
+    return this._cachedProxy;
   }
 
   private _onPortfolioChange(e: Event) {

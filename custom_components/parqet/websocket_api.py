@@ -29,6 +29,19 @@ def _get_coordinator(
     return entry.runtime_data
 
 
+def _send_rate_limit_error(
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    err: ParqetRateLimitError,
+) -> None:
+    """Send a rate_limited error response."""
+    connection.send_error(
+        msg["id"],
+        "rate_limited",
+        f"Rate limit exceeded. Retry in {err.retry_after}s.",
+    )
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register the WebSocket API commands."""
     websocket_api.async_register_command(hass, ws_get_holdings)
@@ -91,11 +104,7 @@ async def ws_get_activities(
             cursor=msg.get("cursor"),
         )
     except ParqetRateLimitError as err:
-        connection.send_error(
-            msg["id"],
-            "rate_limited",
-            f"Rate limit exceeded. Retry in {err.retry_after}s.",
-        )
+        _send_rate_limit_error(connection, msg, err)
         return
     except ParqetApiError:
         connection.send_error(msg["id"], "api_error", "Failed to fetch activities")
@@ -150,11 +159,7 @@ async def ws_get_performance(
     try:
         data = await api.async_get_performance(portfolio_ids, msg["interval"])
     except ParqetRateLimitError as err:
-        connection.send_error(
-            msg["id"],
-            "rate_limited",
-            f"Rate limit exceeded. Retry in {err.retry_after}s.",
-        )
+        _send_rate_limit_error(connection, msg, err)
         return
     except ParqetApiError:
         connection.send_error(
