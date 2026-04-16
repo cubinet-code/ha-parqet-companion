@@ -256,12 +256,22 @@ Seven WebSocket commands are available for advanced use cases and custom cards.
 
 ### `parqet/get_performance`
 
-Fetch performance data with a specific interval.
+Fetch performance data with a specific interval. Supports single or multi-portfolio aggregation.
 
 ```json
 {
   "type": "parqet/get_performance",
   "entry_id": "<config_entry_id>",
+  "interval": "ytd"
+}
+```
+
+For aggregated data across multiple portfolios, use `entry_ids` instead:
+
+```json
+{
+  "type": "parqet/get_performance",
+  "entry_ids": ["<entry_id_1>", "<entry_id_2>"],
   "interval": "ytd"
 }
 ```
