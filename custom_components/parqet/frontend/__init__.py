@@ -42,7 +42,12 @@ async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> No
             _LOGGER.debug("Lovelace not initialised — skipping resource registration")
             return
 
-        mode = lovelace.get("mode") if isinstance(lovelace, dict) else getattr(lovelace, "mode", None)
+        # HA <2026.4 stores a dict with "mode"; HA 2026.4+ uses a LovelaceData
+        # dataclass with "resource_mode". Support both.
+        if isinstance(lovelace, dict):
+            mode = lovelace.get("mode")
+        else:
+            mode = getattr(lovelace, "resource_mode", None) or getattr(lovelace, "mode", None)
         if mode != "storage":
             _LOGGER.debug(
                 "Lovelace mode=%s — resource registration not needed", mode

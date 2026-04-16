@@ -154,7 +154,10 @@ async def ws_get_frontend_diagnostics(
     lovelace = hass.data.get("lovelace")
     if lovelace:
         lovelace_info["available"] = True
-        lovelace_info["mode"] = lovelace.get("mode") if isinstance(lovelace, dict) else getattr(lovelace, "mode", None)
+        if isinstance(lovelace, dict):
+            lovelace_info["mode"] = lovelace.get("mode")
+        else:
+            lovelace_info["mode"] = getattr(lovelace, "resource_mode", None) or getattr(lovelace, "mode", None)
         resources = lovelace.get("resources") if isinstance(lovelace, dict) else getattr(lovelace, "resources", None)
         if resources and hasattr(resources, "async_items"):
             try:
