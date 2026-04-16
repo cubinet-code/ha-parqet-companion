@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
 import voluptuous as vol
@@ -54,17 +53,11 @@ async def _async_get_snapshot(
     if mgr is None:
         return
 
-    # Refresh coordinator data if stale (>60s) so the snapshot uses
-    # current prices. Avoids unnecessary API calls on repeated requests.
+    # Refresh coordinator so the snapshot uses current prices.
+    # async_request_refresh handles its own debouncing internally.
     entry = hass.config_entries.async_get_entry(msg["entry_id"])
     if entry and entry.runtime_data:
-        coordinator = entry.runtime_data
-        stale = True
-        if coordinator.last_update_success_time:
-            age = (datetime.now(UTC) - coordinator.last_update_success_time).total_seconds()
-            stale = age > 60
-        if stale:
-            await coordinator.async_request_refresh()
+        await entry.runtime_data.async_request_refresh()
 
     connection.send_result(msg["id"], mgr.get_snapshot_data())
 

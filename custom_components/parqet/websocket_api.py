@@ -149,12 +149,13 @@ async def ws_get_frontend_diagnostics(
     js_exists = await hass.async_add_executor_job(CARD_JS_PATH.exists)
 
     # Check Lovelace resource registration.
+    # hass.data["lovelace"] may be a dict or a dataclass depending on HA version.
     lovelace_info: dict[str, Any] = {"available": False}
     lovelace = hass.data.get("lovelace")
     if lovelace:
         lovelace_info["available"] = True
-        lovelace_info["mode"] = lovelace.get("mode")
-        resources = lovelace.get("resources")
+        lovelace_info["mode"] = lovelace.get("mode") if isinstance(lovelace, dict) else getattr(lovelace, "mode", None)
+        resources = lovelace.get("resources") if isinstance(lovelace, dict) else getattr(lovelace, "resources", None)
         if resources and hasattr(resources, "async_items"):
             try:
                 all_items = list(resources.async_items())

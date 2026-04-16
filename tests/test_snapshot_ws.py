@@ -75,7 +75,6 @@ class TestWsGetSnapshot:
         # Mock the coordinator refresh (entry.runtime_data)
         entry = hass.config_entries.async_get_entry.return_value
         entry.runtime_data = MagicMock()
-        entry.runtime_data.last_update_success_time = None
         entry.runtime_data.async_request_refresh = AsyncMock()
 
         await _async_get_snapshot(hass, connection, msg)

@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
 
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
@@ -36,29 +35,23 @@ async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> No
     complements add_extra_js_url which covers YAML mode and acts as a fallback.
     """
     try:
-        lovelace: dict[str, Any] | None = hass.data.get("lovelace")
+        # hass.data["lovelace"] may be a dict (older HA) or a LovelaceData
+        # dataclass (HA 2026.4+). Use getattr for compatibility with both.
+        lovelace = hass.data.get("lovelace")
         if not lovelace:
-            _LOGGER.debug(
-                "Lovelace not initialised — skipping resource registration "
-                "(hass.data keys: %s)",
-                list(hass.data.keys())[:20],
-            )
+            _LOGGER.debug("Lovelace not initialised — skipping resource registration")
             return
 
-        mode = lovelace.get("mode")
+        mode = lovelace.get("mode") if isinstance(lovelace, dict) else getattr(lovelace, "mode", None)
         if mode != "storage":
             _LOGGER.debug(
                 "Lovelace mode=%s — resource registration not needed", mode
             )
             return
 
-        resources = lovelace.get("resources")
+        resources = lovelace.get("resources") if isinstance(lovelace, dict) else getattr(lovelace, "resources", None)
         if resources is None:
-            _LOGGER.debug(
-                "Lovelace resources collection unavailable "
-                "(lovelace keys: %s)",
-                list(lovelace.keys()) if isinstance(lovelace, dict) else type(lovelace).__name__,
-            )
+            _LOGGER.debug("Lovelace resources collection unavailable")
             return
 
         # async_load() MUST be called before any read/write to prevent the
