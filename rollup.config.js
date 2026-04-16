@@ -11,8 +11,7 @@ export default {
   input: 'src/parqet-card.ts',
   output: {
     file: 'custom_components/parqet/frontend/parqet-card.js',
-    format: 'iife',
-    name: 'ParqetCard',
+    format: 'es',
     sourcemap: !production,
     inlineDynamicImports: true,
   },

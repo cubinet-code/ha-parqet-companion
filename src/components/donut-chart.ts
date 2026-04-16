@@ -1,3 +1,4 @@
+import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css, svg } from 'lit';
 import { property } from 'lit/decorators.js';
 
@@ -141,9 +142,7 @@ export class ParqetDonutChart extends LitElement {
   `;
 }
 
-if (!customElements.get('parqet-donut-chart')) {
-  customElements.define('parqet-donut-chart', ParqetDonutChart);
-}
+registerElement('parqet-donut-chart', ParqetDonutChart);
 
 declare global {
   interface HTMLElementTagNameMap {

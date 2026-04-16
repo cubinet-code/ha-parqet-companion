@@ -1,3 +1,4 @@
+import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css } from 'lit';
 
 export class ParqetLoadingSpinner extends LitElement {
@@ -32,9 +33,7 @@ export class ParqetLoadingSpinner extends LitElement {
   `;
 }
 
-if (!customElements.get('parqet-loading-spinner')) {
-  customElements.define('parqet-loading-spinner', ParqetLoadingSpinner);
-}
+registerElement('parqet-loading-spinner', ParqetLoadingSpinner);
 
 declare global {
   interface HTMLElementTagNameMap {

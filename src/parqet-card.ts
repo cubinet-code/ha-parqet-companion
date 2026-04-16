@@ -3,6 +3,9 @@
  * Reads portfolio data from HA sensor entities and WebSocket API.
  */
 
+import './diagnostics-frontend';
+import { registerElement } from './diagnostics-frontend';
+
 import { LitElement, html, css, PropertyValues } from 'lit';
 import { property, state } from 'lit/decorators.js';
 
@@ -359,6 +362,4 @@ export class ParqetCompanionCard extends LitElement {
   `;
 }
 
-if (!customElements.get('parqet-companion-card')) {
-  customElements.define('parqet-companion-card', ParqetCompanionCard);
-}
+registerElement('parqet-companion-card', ParqetCompanionCard);

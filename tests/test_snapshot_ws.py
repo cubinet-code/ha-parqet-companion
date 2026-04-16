@@ -9,9 +9,9 @@ from homeassistant.core import HomeAssistant
 
 from custom_components.parqet.const import DOMAIN
 from custom_components.parqet.snapshot_ws import (
+    _async_get_snapshot,
     _async_purge_snapshots,
     _async_take_snapshot,
-    ws_get_snapshot,
 )
 
 MOCK_SNAPSHOT_DATA = {
@@ -66,17 +66,24 @@ def _make_connection() -> MagicMock:
 class TestWsGetSnapshot:
     """Test parqet/get_snapshot WS command."""
 
-    def test_returns_snapshot_data(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_snapshot_data(self) -> None:
         hass, mgr = _make_hass_with_snapshot_manager()
         connection = _make_connection()
         msg = {"id": 1, "type": "parqet/get_snapshot", "entry_id": "entry1"}
 
-        ws_get_snapshot(hass, connection, msg)
+        # Mock the coordinator refresh (entry.runtime_data)
+        entry = hass.config_entries.async_get_entry.return_value
+        entry.runtime_data = MagicMock()
+        entry.runtime_data.async_request_refresh = AsyncMock()
+
+        await _async_get_snapshot(hass, connection, msg)
 
         mgr.get_snapshot_data.assert_called_once()
         connection.send_result.assert_called_once_with(1, MOCK_SNAPSHOT_DATA)
 
-    def test_error_when_snapshots_not_enabled(self) -> None:
+    @pytest.mark.asyncio
+    async def test_error_when_snapshots_not_enabled(self) -> None:
         hass = MagicMock(spec=HomeAssistant)
         entry = MagicMock()
         entry.domain = DOMAIN
@@ -86,14 +93,15 @@ class TestWsGetSnapshot:
         connection = _make_connection()
         msg = {"id": 1, "type": "parqet/get_snapshot", "entry_id": "entry1"}
 
-        ws_get_snapshot(hass, connection, msg)
+        await _async_get_snapshot(hass, connection, msg)
 
         connection.send_error.assert_called_once()
         args = connection.send_error.call_args[0]
         assert args[0] == 1
         assert "not_enabled" in args[1]
 
-    def test_error_when_invalid_entry(self) -> None:
+    @pytest.mark.asyncio
+    async def test_error_when_invalid_entry(self) -> None:
         hass = MagicMock(spec=HomeAssistant)
         hass.config_entries.async_get_entry.return_value = None
         hass.data = {}
@@ -101,7 +109,7 @@ class TestWsGetSnapshot:
         connection = _make_connection()
         msg = {"id": 1, "type": "parqet/get_snapshot", "entry_id": "bogus"}
 
-        ws_get_snapshot(hass, connection, msg)
+        await _async_get_snapshot(hass, connection, msg)
 
         connection.send_error.assert_called_once()
 

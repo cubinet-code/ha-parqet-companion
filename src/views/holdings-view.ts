@@ -1,3 +1,4 @@
+import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, Holding } from '../types';
@@ -215,6 +216,4 @@ export class ParqetHoldingsView extends LitElement {
   `;
 }
 
-if (!customElements.get('parqet-holdings-view')) {
-  customElements.define('parqet-holdings-view', ParqetHoldingsView);
-}
+registerElement('parqet-holdings-view', ParqetHoldingsView);

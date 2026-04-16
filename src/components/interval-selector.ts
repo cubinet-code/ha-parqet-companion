@@ -1,3 +1,4 @@
+import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css } from 'lit';
 import { property } from 'lit/decorators.js';
 import { INTERVALS } from '../const';
@@ -69,9 +70,7 @@ export class ParqetIntervalSelector extends LitElement {
   `;
 }
 
-if (!customElements.get('parqet-interval-selector')) {
-  customElements.define('parqet-interval-selector', ParqetIntervalSelector);
-}
+registerElement('parqet-interval-selector', ParqetIntervalSelector);
 
 declare global {
   interface HTMLElementTagNameMap {

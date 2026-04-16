@@ -1,3 +1,4 @@
+import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, Activity, ActivityType, Holding } from '../types';
@@ -222,6 +223,4 @@ export class ParqetActivitiesView extends LitElement {
   `;
 }
 
-if (!customElements.get('parqet-activities-view')) {
-  customElements.define('parqet-activities-view', ParqetActivitiesView);
-}
+registerElement('parqet-activities-view', ParqetActivitiesView);

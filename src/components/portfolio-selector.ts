@@ -1,3 +1,4 @@
+import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css } from 'lit';
 import { property } from 'lit/decorators.js';
 import type { Portfolio } from '../types';
@@ -53,9 +54,7 @@ export class ParqetPortfolioSelector extends LitElement {
   `;
 }
 
-if (!customElements.get('parqet-portfolio-selector')) {
-  customElements.define('parqet-portfolio-selector', ParqetPortfolioSelector);
-}
+registerElement('parqet-portfolio-selector', ParqetPortfolioSelector);
 
 declare global {
   interface HTMLElementTagNameMap {

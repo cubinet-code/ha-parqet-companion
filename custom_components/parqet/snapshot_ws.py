@@ -6,7 +6,7 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .snapshot import SnapshotManager
@@ -43,6 +43,25 @@ def async_register_snapshot_ws(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_purge_snapshots)
 
 
+async def _async_get_snapshot(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return snapshot-based daily P&L data (inner logic)."""
+    mgr = _get_snapshot_manager(hass, connection, msg)
+    if mgr is None:
+        return
+
+    # Refresh coordinator data so the snapshot uses current prices,
+    # not data that may be up to 15 minutes stale.
+    entry = hass.config_entries.async_get_entry(msg["entry_id"])
+    if entry and hasattr(entry, "runtime_data") and entry.runtime_data:
+        await entry.runtime_data.async_request_refresh()
+
+    connection.send_result(msg["id"], mgr.get_snapshot_data())
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
@@ -50,18 +69,14 @@ def async_register_snapshot_ws(hass: HomeAssistant) -> None:
         vol.Required("entry_id"): str,
     }
 )
-@callback
-def ws_get_snapshot(
+@websocket_api.async_response
+async def ws_get_snapshot(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Return snapshot-based daily P&L data."""
-    mgr = _get_snapshot_manager(hass, connection, msg)
-    if mgr is None:
-        return
-
-    connection.send_result(msg["id"], mgr.get_snapshot_data())
+    await _async_get_snapshot(hass, connection, msg)
 
 
 async def _async_take_snapshot(

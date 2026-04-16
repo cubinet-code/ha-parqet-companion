@@ -1,3 +1,4 @@
+import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, PortfolioPerformance } from '../types';
@@ -82,12 +83,6 @@ export class ParqetPerformanceView extends LitElement {
           ${this._kpi('XIRR', fmtPct(d.kpis?.inInterval?.xirr), d.kpis?.inInterval?.xirr)}
           ${this._kpi('TTWROR', fmtPct(d.kpis?.inInterval?.ttwror), d.kpis?.inInterval?.ttwror)}
           ${this._kpi('Unrealized Gain', fmtCurrency(d.unrealizedGains?.inInterval?.gainGross, this._sym()), d.unrealizedGains?.inInterval?.gainGross)}
-          ${(() => {
-            const start = d.valuation?.atIntervalStart ?? 0;
-            const end = d.valuation?.atIntervalEnd ?? 0;
-            const ret = start > 0 ? ((end - start) / start) * 100 : null;
-            return this._kpi('Period Return', fmtPct(ret), ret);
-          })()}
           ${this._kpi('Realized Gain', fmtCurrency(d.realizedGains?.inInterval?.gainGross, this._sym()), d.realizedGains?.inInterval?.gainGross)}
           ${this._kpi('Dividends', fmtCurrency(d.dividends?.inInterval?.gainGross, this._sym()))}
           ${this._kpi('Fees', fmtCurrency(d.fees?.inInterval?.fees, this._sym()))}
@@ -140,6 +135,4 @@ export class ParqetPerformanceView extends LitElement {
   `;
 }
 
-if (!customElements.get('parqet-performance-view')) {
-  customElements.define('parqet-performance-view', ParqetPerformanceView);
-}
+registerElement('parqet-performance-view', ParqetPerformanceView);

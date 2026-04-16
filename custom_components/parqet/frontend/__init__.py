@@ -38,25 +38,44 @@ async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> No
     try:
         lovelace: dict[str, Any] | None = hass.data.get("lovelace")
         if not lovelace:
-            _LOGGER.debug("Lovelace not initialised — skipping resource registration")
+            _LOGGER.debug(
+                "Lovelace not initialised — skipping resource registration "
+                "(hass.data keys: %s)",
+                list(hass.data.keys())[:20],
+            )
             return
 
-        if lovelace.get("mode") != "storage":
-            _LOGGER.debug("Lovelace YAML mode — resource registration not needed")
+        mode = lovelace.get("mode")
+        if mode != "storage":
+            _LOGGER.debug(
+                "Lovelace mode=%s — resource registration not needed", mode
+            )
             return
 
         resources = lovelace.get("resources")
         if resources is None:
-            _LOGGER.debug("Lovelace resources collection unavailable")
+            _LOGGER.debug(
+                "Lovelace resources collection unavailable "
+                "(lovelace keys: %s, type: %s)",
+                list(lovelace.keys()) if isinstance(lovelace, dict) else type(lovelace).__name__,
+                type(resources).__name__,
+            )
             return
 
         # async_load() MUST be called before any read/write to prevent the
         # lazy-load bug that would overwrite existing resources with only ours.
         await resources.async_load()
 
+        all_items = list(resources.async_items())
+        _LOGGER.debug(
+            "Lovelace resources loaded: %d items, urls: %s",
+            len(all_items),
+            [i.get("url", "?") for i in all_items],
+        )
+
         # Compare by base URL (without ?v= query param) to detect version updates.
         existing = next(
-            (i for i in resources.async_items()
+            (i for i in all_items
              if i.get("url", "").split("?")[0] == CARD_JS_URL),
             None,
         )
@@ -66,9 +85,15 @@ async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> No
             _LOGGER.debug("Registered Parqet Lovelace resource: %s", url)
         elif existing.get("url") != url:
             await resources.async_update_item(existing["id"], {"url": url})
-            _LOGGER.debug("Updated Parqet Lovelace resource: %s → %s", existing.get("url"), url)
+            _LOGGER.debug(
+                "Updated Parqet Lovelace resource: %s → %s",
+                existing.get("url"), url,
+            )
         else:
-            _LOGGER.debug("Parqet Lovelace resource already current: %s", url)
+            _LOGGER.debug(
+                "Parqet Lovelace resource already current: %s (id=%s, type=%s)",
+                url, existing.get("id"), existing.get("res_type"),
+            )
 
     except Exception:
         _LOGGER.exception("Failed to register Parqet Lovelace resource")
@@ -85,7 +110,7 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
 
     # Serve the JS file at /parqet/parqet-card.js (clean path, no query params).
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(CARD_JS_URL, str(CARD_JS_PATH), cache_headers=True)]
+        [StaticPathConfig(CARD_JS_URL, str(CARD_JS_PATH), cache_headers=False)]
     )
 
     # Fallback: inject script tag on every HA page (covers YAML mode).
@@ -105,4 +130,8 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
 
     async_at_started(hass, _schedule_lovelace_registration)
 
-    _LOGGER.debug("Registered Parqet card frontend at %s", versioned_url)
+    _LOGGER.debug(
+        "Registered Parqet card frontend: static_path=%s, "
+        "versioned_url=%s, cache_headers=False, js_exists=%s",
+        CARD_JS_URL, versioned_url, CARD_JS_PATH.exists(),
+    )

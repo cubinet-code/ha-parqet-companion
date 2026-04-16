@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import logging
+from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
@@ -11,6 +14,8 @@ from homeassistant.core import HomeAssistant, callback
 from .api import ParqetApiError
 from .const import DEFAULT_INTERVAL, DOMAIN
 from .coordinator import ParqetDataUpdateCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _get_coordinator(
@@ -31,6 +36,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get_holdings)
     websocket_api.async_register_command(hass, ws_get_activities)
     websocket_api.async_register_command(hass, ws_get_performance)
+    websocket_api.async_register_command(hass, ws_get_frontend_diagnostics)
 
 
 @websocket_api.require_admin
@@ -124,3 +130,72 @@ async def ws_get_performance(
         return
 
     connection.send_result(msg["id"], data)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "parqet/frontend_diagnostics",
+    }
+)
+@callback
+def ws_get_frontend_diagnostics(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return frontend registration diagnostics for debugging card loading."""
+    from .frontend import CARD_JS_PATH, CARD_JS_URL
+
+    # Read version from manifest.
+    manifest_path = Path(__file__).parent / "manifest.json"
+    try:
+        version = json.loads(manifest_path.read_text()).get("version", "unknown")
+    except Exception:
+        version = "unknown"
+
+    # Check Lovelace resource registration.
+    lovelace_info: dict[str, Any] = {"available": False}
+    lovelace = hass.data.get("lovelace")
+    if lovelace:
+        lovelace_info["available"] = True
+        lovelace_info["mode"] = lovelace.get("mode")
+        resources = lovelace.get("resources")
+        if resources and hasattr(resources, "async_items"):
+            try:
+                all_items = list(resources.async_items())
+                parqet_resources = [
+                    {
+                        "id": i.get("id"),
+                        "url": i.get("url"),
+                        "type": i.get("res_type"),
+                    }
+                    for i in all_items
+                    if CARD_JS_URL in i.get("url", "")
+                ]
+                lovelace_info["total_resources"] = len(all_items)
+                lovelace_info["parqet_resources"] = parqet_resources
+            except Exception as exc:
+                lovelace_info["error"] = str(exc)
+
+    # Config entries.
+    entries = [
+        {
+            "entry_id": e.entry_id,
+            "title": e.title,
+            "state": str(e.state),
+        }
+        for e in hass.config_entries.async_entries(DOMAIN)
+    ]
+
+    result = {
+        "version": version,
+        "js_path": str(CARD_JS_PATH),
+        "js_exists": CARD_JS_PATH.exists(),
+        "js_url": CARD_JS_URL,
+        "lovelace": lovelace_info,
+        "config_entries": entries,
+    }
+
+    _LOGGER.debug("Frontend diagnostics: %s", result)
+    connection.send_result(msg["id"], result)

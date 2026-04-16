@@ -1,3 +1,5 @@
+import { registerElement } from './diagnostics-frontend';
+
 import { LitElement, html, css } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import type {
@@ -315,9 +317,7 @@ export class ParqetSnapshotCard extends LitElement {
   `;
 }
 
-if (!customElements.get('parqet-snapshot-card')) {
-  customElements.define('parqet-snapshot-card', ParqetSnapshotCard);
-}
+registerElement('parqet-snapshot-card', ParqetSnapshotCard);
 
 declare global {
   interface HTMLElementTagNameMap {

@@ -1,3 +1,4 @@
+import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css, svg } from 'lit';
 import { property } from 'lit/decorators.js';
 
@@ -126,9 +127,7 @@ export class ParqetStackedBar extends LitElement {
   `;
 }
 
-if (!customElements.get('parqet-stacked-bar')) {
-  customElements.define('parqet-stacked-bar', ParqetStackedBar);
-}
+registerElement('parqet-stacked-bar', ParqetStackedBar);
 
 declare global {
   interface HTMLElementTagNameMap {
