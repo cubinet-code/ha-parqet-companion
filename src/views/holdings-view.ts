@@ -3,7 +3,7 @@ import { LitElement, html, css } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, Holding } from '../types';
 import type { IntervalValue } from '../const';
-import { fmtCurrency, fmtPct, valueClass } from '../utils';
+import { fmtCurrency, fmtPct, valueClass, buildPerformanceMsg } from '../utils';
 import '../components/interval-selector';
 import '../components/loading-spinner';
 import '../components/donut-chart';
@@ -47,20 +47,9 @@ export class ParqetHoldingsView extends LitElement {
     this._error = '';
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const p = this.portfolio as any;
-      const wsMsg: Record<string, unknown> = {
-        type: 'parqet/get_performance',
-        interval: this._interval,
-      };
-      if (p._entryIds) {
-        wsMsg.entry_ids = p._entryIds;
-      } else {
-        wsMsg.entry_id = this.portfolio.entryId;
-      }
-      const result = (await this.hass.connection.sendMessagePromise(wsMsg)) as {
-        holdings: Holding[];
-      };
+      const result = (await this.hass.connection.sendMessagePromise(
+        buildPerformanceMsg(this.portfolio, this._interval),
+      )) as { holdings: Holding[] };
       if (gen !== this._fetchGen) return;
       this._holdings = (result.holdings || []).filter((h) => !h.position?.isSold);
     } catch {

@@ -343,7 +343,7 @@ export class ParqetCompanionCard extends LitElement {
       entityPrefix: null,
       sensors: {},
       _entryIds: this._portfolios.map((p) => p.entryId),
-    } as DiscoveredPortfolio & { _entryIds: string[] };
+    };
   }
 
   private _onPortfolioChange(e: Event) {

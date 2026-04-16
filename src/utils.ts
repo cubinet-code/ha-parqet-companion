@@ -26,6 +26,30 @@ export function valueClass(v: number | null | undefined): string {
 }
 
 /**
+ * Build a WS message for parqet/get_performance, handling both single and
+ * aggregated portfolios.
+ */
+export function buildPerformanceMsg(
+  portfolio: { entryId: string; _entryIds?: string[] },
+  interval: string,
+): Record<string, unknown> {
+  const msg: Record<string, unknown> = { type: 'parqet/get_performance', interval };
+  if (portfolio._entryIds) {
+    msg.entry_ids = portfolio._entryIds;
+  } else {
+    msg.entry_id = portfolio.entryId;
+  }
+  return msg;
+}
+
+/**
+ * Return the list of entry IDs for a portfolio (single or aggregated).
+ */
+export function getEntryIds(portfolio: { entryId: string; _entryIds?: string[] }): string[] {
+  return portfolio._entryIds ?? [portfolio.entryId];
+}
+
+/**
  * Format a date string to a localized short date.
  */
 export function fmtDate(iso: string): string {

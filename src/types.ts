@@ -152,4 +152,6 @@ export interface DiscoveredPortfolio {
   name: string;
   entityPrefix: string | null; // null when discovered via entity registry
   sensors: Record<string, HassEntity>;
+  /** Present on the "All Portfolios" aggregate proxy. */
+  _entryIds?: string[];
 }

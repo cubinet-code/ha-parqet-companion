@@ -4,7 +4,7 @@ import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, PortfolioPerformance } from '../types';
 import type { IntervalValue } from '../const';
 import type { StackedSegment } from '../components/stacked-bar';
-import { fmtCurrency, fmtPct, valueClass } from '../utils';
+import { fmtCurrency, fmtPct, valueClass, buildPerformanceMsg } from '../utils';
 import '../components/interval-selector';
 import '../components/loading-spinner';
 import '../components/stacked-bar';
@@ -42,20 +42,9 @@ export class ParqetPerformanceView extends LitElement {
     this._error = '';
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const p = this.portfolio as any;
-      const wsMsg: Record<string, unknown> = {
-        type: 'parqet/get_performance',
-        interval: this._interval,
-      };
-      if (p._entryIds) {
-        wsMsg.entry_ids = p._entryIds;
-      } else {
-        wsMsg.entry_id = this.portfolio.entryId;
-      }
-      const result = (await this.hass.connection.sendMessagePromise(wsMsg)) as {
-        performance: PortfolioPerformance;
-      };
+      const result = (await this.hass.connection.sendMessagePromise(
+        buildPerformanceMsg(this.portfolio, this._interval),
+      )) as { performance: PortfolioPerformance };
       if (gen !== this._fetchGen) return;
       this._wsData = result.performance;
     } catch {

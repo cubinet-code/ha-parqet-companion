@@ -2,7 +2,7 @@ import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, Activity, ActivityType, Holding } from '../types';
-import { fmtCurrency, fmtDate } from '../utils';
+import { fmtCurrency, fmtDate, getEntryIds } from '../utils';
 import '../components/loading-spinner';
 
 const ACTIVITY_TYPES: { value: string; label: string }[] = [
@@ -53,21 +53,23 @@ export class ParqetActivitiesView extends LitElement {
     if (changed.has('portfolio')) void this._load();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private _entryIds(): string[] {
-    const p = this.portfolio as any;
-    return p._entryIds ?? [this.portfolio.entryId];
+  private _isAggregated(): boolean {
+    return (getEntryIds(this.portfolio).length > 1);
   }
 
   private async _loadHoldingsMap() {
     if (this._holdingsMap.size > 0) return;
     try {
       const map = new Map<string, string>();
-      for (const eid of this._entryIds()) {
-        const result = (await this.hass.connection.sendMessagePromise({
-          type: 'parqet/get_holdings',
-          entry_id: eid,
-        })) as { holdings: Holding[] };
+      const results = await Promise.all(
+        getEntryIds(this.portfolio).map((eid) =>
+          this.hass.connection.sendMessagePromise({
+            type: 'parqet/get_holdings',
+            entry_id: eid,
+          }) as Promise<{ holdings: Holding[] }>,
+        ),
+      );
+      for (const result of results) {
         for (const h of result.holdings || []) {
           if (h.id) map.set(h.id, h.nickname ?? h.asset?.name ?? 'Unknown');
         }
@@ -86,28 +88,36 @@ export class ParqetActivitiesView extends LitElement {
 
     try {
       const limit = this.config?.activities_limit ?? 25;
+      const eids = getEntryIds(this.portfolio);
+
+      // Fetch all portfolios in parallel.
+      const results = await Promise.all(
+        eids.map((eid) => {
+          const params: Record<string, unknown> = {
+            type: 'parqet/get_activities',
+            entry_id: eid,
+            limit,
+          };
+          if (this._filter !== 'all') {
+            params['activity_type'] = [this._filter];
+          }
+          // Pagination only works for single-portfolio; aggregated mode
+          // fetches everything without cursor to avoid cross-portfolio issues.
+          if (!this._isAggregated() && append && this._cursor) {
+            params['cursor'] = this._cursor;
+          }
+          return this.hass.connection.sendMessagePromise(params) as Promise<{
+            activities: Activity[];
+            cursor: string | null;
+          }>;
+        }),
+      );
+
       const allActivities: Activity[] = [];
-      let anyCursor: string | null = null;
-
-      for (const eid of this._entryIds()) {
-        const params: Record<string, unknown> = {
-          type: 'parqet/get_activities',
-          entry_id: eid,
-          limit,
-        };
-        if (this._filter !== 'all') {
-          params['activity_type'] = [this._filter];
-        }
-        if (append && this._cursor) {
-          params['cursor'] = this._cursor;
-        }
-
-        const result = (await this.hass.connection.sendMessagePromise(params)) as {
-          activities: Activity[];
-          cursor: string | null;
-        };
+      let singleCursor: string | null = null;
+      for (const result of results) {
         allActivities.push(...result.activities);
-        if (result.cursor) anyCursor = result.cursor;
+        if (result.cursor) singleCursor = result.cursor;
       }
 
       // Sort merged activities by date descending.
@@ -120,8 +130,9 @@ export class ParqetActivitiesView extends LitElement {
       } else {
         this._activities = allActivities;
       }
-      this._cursor = anyCursor;
-      this._hasMore = !!anyCursor;
+      // Pagination only for single-portfolio mode.
+      this._cursor = this._isAggregated() ? null : singleCursor;
+      this._hasMore = !this._isAggregated() && !!singleCursor;
     } catch {
       this._error = 'Failed to load activities';
     } finally {
