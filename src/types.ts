@@ -72,7 +72,7 @@ export interface Holding {
   id: string;
   nickname: string | null;
   logo: string | null;
-  asset: { name: string; type: string; isin?: string; symbol?: string };
+  asset: { name: string; type: string; isin?: string; symbol?: string; identifier?: string };
   position: {
     shares: number;
     purchasePrice: number;
