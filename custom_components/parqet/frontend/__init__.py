@@ -56,9 +56,8 @@ async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> No
         if resources is None:
             _LOGGER.debug(
                 "Lovelace resources collection unavailable "
-                "(lovelace keys: %s, type: %s)",
+                "(lovelace keys: %s)",
                 list(lovelace.keys()) if isinstance(lovelace, dict) else type(lovelace).__name__,
-                type(resources).__name__,
             )
             return
 

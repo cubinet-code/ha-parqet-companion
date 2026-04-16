@@ -65,11 +65,3 @@ export function registerElement(name: string, constructor: CustomElementConstruc
   }
 }
 
-/**
- * Report a non-fatal error for diagnostic purposes.
- */
-export function reportError(context: string, err: unknown): void {
-  const msg = err instanceof Error ? err.message : String(err);
-  diag.errors.push(`${context}: ${msg}`);
-  console.error(`[parqet-card] Error in ${context}:`, msg);
-}

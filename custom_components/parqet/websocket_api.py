@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import logging
-from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
@@ -138,21 +136,17 @@ async def ws_get_performance(
         vol.Required("type"): "parqet/frontend_diagnostics",
     }
 )
-@callback
-def ws_get_frontend_diagnostics(
+@websocket_api.async_response
+async def ws_get_frontend_diagnostics(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Return frontend registration diagnostics for debugging card loading."""
-    from .frontend import CARD_JS_PATH, CARD_JS_URL
+    from .frontend import CARD_JS_PATH, CARD_JS_URL, _read_manifest_version
 
-    # Read version from manifest.
-    manifest_path = Path(__file__).parent / "manifest.json"
-    try:
-        version = json.loads(manifest_path.read_text()).get("version", "unknown")
-    except Exception:
-        version = "unknown"
+    version = await hass.async_add_executor_job(_read_manifest_version)
+    js_exists = await hass.async_add_executor_job(CARD_JS_PATH.exists)
 
     # Check Lovelace resource registration.
     lovelace_info: dict[str, Any] = {"available": False}
@@ -191,7 +185,7 @@ def ws_get_frontend_diagnostics(
     result = {
         "version": version,
         "js_path": str(CARD_JS_PATH),
-        "js_exists": CARD_JS_PATH.exists(),
+        "js_exists": js_exists,
         "js_url": CARD_JS_URL,
         "lovelace": lovelace_info,
         "config_entries": entries,

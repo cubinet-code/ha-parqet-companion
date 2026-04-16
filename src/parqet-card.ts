@@ -3,7 +3,6 @@
  * Reads portfolio data from HA sensor entities and WebSocket API.
  */
 
-import './diagnostics-frontend';
 import { registerElement } from './diagnostics-frontend';
 
 import { LitElement, html, css, PropertyValues } from 'lit';
