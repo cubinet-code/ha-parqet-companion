@@ -252,7 +252,7 @@ Daily P&L is shown starting the day after the first snapshot is taken.
 
 ## WebSocket API
 
-Six WebSocket commands are available for advanced use cases and custom cards.
+Seven WebSocket commands are available for advanced use cases and custom cards.
 
 ### `parqet/get_performance`
 
@@ -321,6 +321,16 @@ Clear all stored snapshot data.
 {
   "type": "parqet/purge_snapshots",
   "entry_id": "<config_entry_id>"
+}
+```
+
+### `parqet/frontend_diagnostics`
+
+Returns frontend registration diagnostics for debugging card loading issues.
+
+```json
+{
+  "type": "parqet/frontend_diagnostics"
 }
 ```
 
