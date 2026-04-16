@@ -1,10 +1,10 @@
 import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css } from 'lit';
-import { property, state } from 'lit/decorators.js';
+import { property } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, PortfolioPerformance } from '../types';
 import type { IntervalValue } from '../const';
 import type { StackedSegment } from '../components/stacked-bar';
-import { fmtCurrency, fmtPct, valueClass, buildPerformanceMsg } from '../utils';
+import { fmtCurrency, fmtPct, valueClass } from '../utils';
 import '../components/interval-selector';
 import '../components/loading-spinner';
 import '../components/stacked-bar';
@@ -13,67 +13,29 @@ export class ParqetPerformanceView extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @property({ attribute: false }) portfolio!: DiscoveredPortfolio;
   @property({ attribute: false }) config!: ParqetCardConfig;
-
-  @state() private _interval: IntervalValue = '1y';
-  @state() private _wsData: PortfolioPerformance | null = null;
-  @state() private _loading = false;
-  @state() private _error = '';
-
-  _fetchGen = 0;
-
-  connectedCallback() {
-    super.connectedCallback();
-    this._interval = (this.config?.default_interval as IntervalValue) ?? '1y';
-    void this._load();
-  }
-
-  updated(changed: Map<string, unknown>) {
-    if (changed.has('portfolio')) void this._load();
-  }
+  @property({ attribute: false }) perfData: PortfolioPerformance | null = null;
+  @property({ attribute: false }) loading = false;
+  @property({ attribute: false }) error = '';
+  @property() interval: IntervalValue = '1y';
 
   private _sym(): string {
     return this.config?.currency_symbol ?? '€';
   }
 
-  private async _load() {
-    if (!this.hass || !this.portfolio) return;
-    const gen = ++this._fetchGen;
-    this._loading = true;
-    this._error = '';
-
-    try {
-      const result = (await this.hass.connection.sendMessagePromise(
-        buildPerformanceMsg(this.portfolio, this._interval),
-      )) as { performance: PortfolioPerformance };
-      if (gen !== this._fetchGen) return;
-      this._wsData = result.performance;
-    } catch {
-      if (gen !== this._fetchGen) return;
-      this._error = 'Failed to load performance data';
-      this._wsData = null;
-    } finally {
-      if (gen === this._fetchGen) this._loading = false;
-    }
-  }
-
-  async _onIntervalChange(e: CustomEvent) {
-    this._interval = e.detail.interval as IntervalValue;
-    return this._load();
-  }
-
   render() {
-    const d = this._wsData;
+    const d = this.perfData;
 
     return html`
       ${this.config?.show_interval_selector !== false ? html`
         <parqet-interval-selector
-          .selected=${this._interval}
-          @interval-change=${this._onIntervalChange}
+          .selected=${this.interval}
+          @interval-change=${(e: CustomEvent) =>
+            this.dispatchEvent(new CustomEvent('interval-change', { detail: e.detail, bubbles: true, composed: true }))}
         ></parqet-interval-selector>
       ` : ''}
 
-      ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : ''}
-      ${this._loading ? html`<parqet-loading-spinner></parqet-loading-spinner>` : ''}
+      ${this.error ? html`<div class="error" role="alert">${this.error}</div>` : ''}
+      ${this.loading ? html`<parqet-loading-spinner></parqet-loading-spinner>` : ''}
 
       ${d ? html`
         <div class="kpi-grid ${this.config?.compact ? 'compact' : ''}">
@@ -87,7 +49,7 @@ export class ParqetPerformanceView extends LitElement {
           ${this._kpi('Taxes', fmtCurrency(d.taxes?.inInterval?.taxes, this._sym()))}
         </div>
         ${(this.config?.show_performance_chart ?? this.config?.show_chart) !== false ? this._renderChart(d) : ''}
-      ` : !this._loading ? html`<div class="empty">No data available.</div>` : ''}
+      ` : !this.loading ? html`<div class="empty">No data available.</div>` : ''}
     `;
   }
 

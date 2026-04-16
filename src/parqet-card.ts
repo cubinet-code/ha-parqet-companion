@@ -8,9 +8,11 @@ import { registerElement } from './diagnostics-frontend';
 import { LitElement, html, css, PropertyValues } from 'lit';
 import { property, state } from 'lit/decorators.js';
 
-import type { Hass, ParqetCardConfig, ViewType, DiscoveredPortfolio, HassEntity } from './types';
+import type { Hass, ParqetCardConfig, ViewType, DiscoveredPortfolio, PortfolioPerformance, Holding, HassEntity } from './types';
+import type { IntervalValue } from './const';
 import { DOMAIN } from './const';
 import { discoverPortfolios } from './discovery';
+import { buildPerformanceMsg } from './utils';
 
 import './components/loading-spinner';
 import './views/performance-view';
@@ -41,7 +43,14 @@ export class ParqetCompanionCard extends LitElement {
   @state() private _portfolios: DiscoveredPortfolio[] = [];
   @state() private _selectedIndex = -1;
   @state() private _activeView: ViewType = 'performance';
+  @state() private _interval: IntervalValue = '1y';
+  @state() private _perfData: PortfolioPerformance | null = null;
+  @state() private _holdingsData: Holding[] = [];
+  @state() private _dataLoading = false;
+  @state() private _dataError = '';
+  @state() private _rateLimited = false;
   private _lastEntities: Hass['entities'] | undefined;
+  private _fetchGen = 0;
 
   // ─── HA card API ──────────────────────────────────────────────────────────
 
@@ -59,6 +68,7 @@ export class ParqetCompanionCard extends LitElement {
       ...config,
     };
     this._activeView = this._config.default_view!;
+    this._interval = (this._config.default_interval as IntervalValue) ?? '1y';
   }
 
   getCardSize(): number {
@@ -246,6 +256,7 @@ export class ParqetCompanionCard extends LitElement {
       } else {
         this._selectedIndex = -1;
       }
+      void this._loadData();
     }
   }
 
@@ -263,12 +274,7 @@ export class ParqetCompanionCard extends LitElement {
       `;
     }
 
-    // Index -1 = "All Portfolios" (aggregated); 0+ = individual portfolios
-    const isAggregated = this._portfolios.length > 1 && this._selectedIndex === -1;
-    const portfolio = isAggregated
-      ? this._allPortfoliosProxy()
-      : this._portfolios[this._selectedIndex] || this._portfolios[0];
-    const showTabs = true;
+    const portfolio = this._getActivePortfolio()!;
     const views: ViewType[] = ['performance', 'holdings', 'activities'];
 
     return html`
@@ -286,20 +292,22 @@ export class ParqetCompanionCard extends LitElement {
           </div>
         ` : ''}
 
-        ${showTabs ? html`
-          <div class="tabs" role="tablist">
-            ${views.map((v) => html`
-              <button
-                class="tab ${this._activeView === v ? 'active' : ''}"
-                role="tab"
-                aria-selected=${this._activeView === v}
-                @click=${() => (this._activeView = v)}
-              >
-                ${v.charAt(0).toUpperCase() + v.slice(1)}
-              </button>
-            `)}
-          </div>
+        ${this._rateLimited ? html`
+          <div class="rate-limit" role="alert">API rate limit reached — data will refresh automatically</div>
         ` : ''}
+
+        <div class="tabs" role="tablist">
+          ${views.map((v) => html`
+            <button
+              class="tab ${this._activeView === v ? 'active' : ''}"
+              role="tab"
+              aria-selected=${this._activeView === v}
+              @click=${() => (this._activeView = v)}
+            >
+              ${v.charAt(0).toUpperCase() + v.slice(1)}
+            </button>
+          `)}
+        </div>
 
         <div class="view-content" role="tabpanel">
           ${this._renderView(portfolio)}
@@ -315,6 +323,11 @@ export class ParqetCompanionCard extends LitElement {
           .hass=${this.hass}
           .portfolio=${portfolio}
           .config=${this._config}
+          .perfData=${this._perfData}
+          .loading=${this._dataLoading}
+          .error=${this._dataError}
+          .interval=${this._interval}
+          @interval-change=${this._onIntervalChange}
         ></parqet-performance-view>
       `;
     }
@@ -324,6 +337,11 @@ export class ParqetCompanionCard extends LitElement {
           .hass=${this.hass}
           .portfolio=${portfolio}
           .config=${this._config}
+          .holdingsData=${this._holdingsData}
+          .loading=${this._dataLoading}
+          .error=${this._dataError}
+          .interval=${this._interval}
+          @interval-change=${this._onIntervalChange}
         ></parqet-holdings-view>
       `;
     }
@@ -334,6 +352,51 @@ export class ParqetCompanionCard extends LitElement {
         .config=${this._config}
       ></parqet-activities-view>
     `;
+  }
+
+  private _getActivePortfolio(): DiscoveredPortfolio | null {
+    if (!this._portfolios.length) return null;
+    const isAggregated = this._portfolios.length > 1 && this._selectedIndex === -1;
+    return isAggregated
+      ? this._allPortfoliosProxy()
+      : this._portfolios[this._selectedIndex] || this._portfolios[0];
+  }
+
+  private async _loadData() {
+    const portfolio = this._getActivePortfolio();
+    if (!this.hass || !portfolio) return;
+    const gen = ++this._fetchGen;
+    this._dataLoading = true;
+    this._dataError = '';
+    this._rateLimited = false;
+
+    try {
+      const result = (await this.hass.connection.sendMessagePromise(
+        buildPerformanceMsg(portfolio, this._interval),
+      )) as { performance: PortfolioPerformance; holdings: Holding[] };
+      if (gen !== this._fetchGen) return;
+      this._perfData = result.performance;
+      this._holdingsData = (result.holdings || []).filter(
+        (h: Holding) => !h.position?.isSold,
+      );
+    } catch (err: unknown) {
+      if (gen !== this._fetchGen) return;
+      if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'rate_limited') {
+        this._rateLimited = true;
+        this._dataError = (err as { message?: string }).message || 'Rate limit exceeded';
+      } else {
+        this._dataError = 'Failed to load data';
+      }
+      this._perfData = null;
+      this._holdingsData = [];
+    } finally {
+      if (gen === this._fetchGen) this._dataLoading = false;
+    }
+  }
+
+  _onIntervalChange(e: CustomEvent) {
+    this._interval = e.detail.interval as IntervalValue;
+    void this._loadData();
   }
 
   private _allPortfoliosProxy(): DiscoveredPortfolio {
@@ -348,6 +411,7 @@ export class ParqetCompanionCard extends LitElement {
 
   private _onPortfolioChange(e: Event) {
     this._selectedIndex = parseInt((e.target as HTMLSelectElement).value, 10);
+    void this._loadData();
   }
 
   // ─── Styles ────────────────────────────────────────────────────────────────
@@ -380,6 +444,11 @@ export class ParqetCompanionCard extends LitElement {
       gap: 4px; padding: 32px; font-size: 0.875rem; color: var(--secondary-text-color);
     }
     .hint { font-size: 0.75rem; opacity: 0.7; }
+    .rate-limit {
+      margin: 8px 16px; padding: 8px 12px;
+      background: rgba(255, 152, 0, 0.12); color: var(--warning-color, #ff9800);
+      border-radius: 6px; font-size: 0.82rem;
+    }
   `;
 }
 

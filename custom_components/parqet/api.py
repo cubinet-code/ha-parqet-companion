@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
@@ -28,6 +29,14 @@ class ParqetAuthError(ParqetApiError):
 
 class ParqetConnectionError(ParqetApiError):
     """Connection or server error."""
+
+
+class ParqetRateLimitError(ParqetApiError):
+    """Rate limit exceeded (429)."""
+
+    def __init__(self, retry_after: int = 0) -> None:
+        super().__init__(f"Rate limit exceeded (retry in {retry_after}s)")
+        self.retry_after = retry_after
 
 
 class ParqetApiClient:
@@ -165,6 +174,18 @@ def _handle_response(resp: aiohttp.ClientResponse, body: bytes) -> Any:
         raise ParqetApiError(
             f"Insufficient permissions ({resp.status})"
         )
+    if resp.status == 429:
+        retry_after = 0
+        try:
+            data = json.loads(body)
+            msg = data.get("message", "")
+            # Parse "Try again in 438 seconds." from the message.
+            match = re.search(r"(\d+)\s*seconds", msg)
+            if match:
+                retry_after = int(match.group(1))
+        except (json.JSONDecodeError, ValueError):
+            pass
+        raise ParqetRateLimitError(retry_after)
     if resp.status >= 500:
         raise ParqetConnectionError(
             f"Server error ({resp.status})"

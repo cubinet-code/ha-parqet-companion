@@ -3,7 +3,7 @@ import { LitElement, html, css } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, Holding } from '../types';
 import type { IntervalValue } from '../const';
-import { fmtCurrency, fmtPct, valueClass, buildPerformanceMsg } from '../utils';
+import { fmtCurrency, fmtPct, valueClass } from '../utils';
 import '../components/interval-selector';
 import '../components/loading-spinner';
 import '../components/donut-chart';
@@ -19,62 +19,25 @@ export class ParqetHoldingsView extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @property({ attribute: false }) portfolio!: DiscoveredPortfolio;
   @property({ attribute: false }) config!: ParqetCardConfig;
+  @property({ attribute: false }) holdingsData: Holding[] = [];
+  @property({ attribute: false }) loading = false;
+  @property({ attribute: false }) error = '';
+  @property() interval: IntervalValue = 'max';
 
-  @state() _holdings: Holding[] = [];
-  @state() _loading = false;
-  @state() _error = '';
-  @state() _interval: IntervalValue = 'max';
   @state() private _sortBy: 'name' | 'value' | 'pl' | 'plPct' | 'weight' = 'value';
   @state() private _sortAsc = false;
   @state() private _expandedId: string | null = null;
-
-  _fetchGen = 0;
-
-  connectedCallback() {
-    super.connectedCallback();
-    this._interval = (this.config?.default_interval as IntervalValue) ?? 'max';
-    void this._load();
-  }
-
-  updated(changed: Map<string, unknown>) {
-    if (changed.has('portfolio')) void this._load();
-  }
-
-  private async _load() {
-    if (!this.hass || !this.portfolio) return;
-    const gen = ++this._fetchGen;
-    this._loading = true;
-    this._error = '';
-
-    try {
-      const result = (await this.hass.connection.sendMessagePromise(
-        buildPerformanceMsg(this.portfolio, this._interval),
-      )) as { holdings: Holding[] };
-      if (gen !== this._fetchGen) return;
-      this._holdings = (result.holdings || []).filter((h) => !h.position?.isSold);
-    } catch {
-      if (gen !== this._fetchGen) return;
-      this._error = 'Failed to load holdings';
-    } finally {
-      if (gen === this._fetchGen) this._loading = false;
-    }
-  }
-
-  async _onIntervalChange(e: CustomEvent) {
-    this._interval = e.detail.interval as IntervalValue;
-    return this._load();
-  }
 
   private _sym(): string {
     return this.config?.currency_symbol ?? '€';
   }
 
   private _totalValue(): number {
-    return this._holdings.reduce((sum, h) => sum + (h.position?.currentValue ?? 0), 0);
+    return this.holdingsData.reduce((sum, h) => sum + (h.position?.currentValue ?? 0), 0);
   }
 
   private _sorted(total: number): Holding[] {
-    const sorted = [...this._holdings].sort((a, b) => {
+    const sorted = [...this.holdingsData].sort((a, b) => {
       switch (this._sortBy) {
         case 'name': return (a.asset?.name ?? '').localeCompare(b.asset?.name ?? '');
         case 'value': return (b.position?.currentValue ?? 0) - (a.position?.currentValue ?? 0);
@@ -100,16 +63,17 @@ export class ParqetHoldingsView extends LitElement {
     return html`
       ${this.config?.show_interval_selector !== false ? html`
         <parqet-interval-selector
-          .selected=${this._interval}
-          @interval-change=${this._onIntervalChange}
+          .selected=${this.interval}
+          @interval-change=${(e: CustomEvent) =>
+            this.dispatchEvent(new CustomEvent('interval-change', { detail: e.detail, bubbles: true, composed: true }))}
         ></parqet-interval-selector>
       ` : ''}
 
-      ${this._loading ? html`<parqet-loading-spinner></parqet-loading-spinner>` : ''}
-      ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : ''}
-      ${!this._loading && !this._error && !this._holdings.length ? html`<div class="empty">No holdings found.</div>` : ''}
+      ${this.loading ? html`<parqet-loading-spinner></parqet-loading-spinner>` : ''}
+      ${this.error ? html`<div class="error" role="alert">${this.error}</div>` : ''}
+      ${!this.loading && !this.error && !this.holdingsData.length ? html`<div class="empty">No holdings found.</div>` : ''}
 
-      ${!this._loading && !this._error && this._holdings.length ? (() => {
+      ${!this.loading && !this.error && this.holdingsData.length ? (() => {
         const total = this._totalValue();
         const limit = this.config?.holdings_limit ?? 50;
         const sorted = this._sorted(total).slice(0, limit);

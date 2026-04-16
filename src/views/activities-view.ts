@@ -133,8 +133,12 @@ export class ParqetActivitiesView extends LitElement {
       // Pagination only for single-portfolio mode.
       this._cursor = this._isAggregated() ? null : singleCursor;
       this._hasMore = !this._isAggregated() && !!singleCursor;
-    } catch {
-      this._error = 'Failed to load activities';
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'rate_limited') {
+        this._error = 'API rate limit reached — data will refresh automatically';
+      } else {
+        this._error = 'Failed to load activities';
+      }
     } finally {
       this._loading = false;
     }

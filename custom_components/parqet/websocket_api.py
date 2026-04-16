@@ -9,7 +9,7 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
-from .api import ParqetApiError
+from .api import ParqetApiError, ParqetRateLimitError
 from .const import DEFAULT_INTERVAL, DOMAIN
 from .coordinator import ParqetDataUpdateCoordinator
 
@@ -90,6 +90,13 @@ async def ws_get_activities(
             limit=msg["limit"],
             cursor=msg.get("cursor"),
         )
+    except ParqetRateLimitError as err:
+        connection.send_error(
+            msg["id"],
+            "rate_limited",
+            f"Rate limit exceeded. Retry in {err.retry_after}s.",
+        )
+        return
     except ParqetApiError:
         connection.send_error(msg["id"], "api_error", "Failed to fetch activities")
         return
@@ -142,6 +149,13 @@ async def ws_get_performance(
 
     try:
         data = await api.async_get_performance(portfolio_ids, msg["interval"])
+    except ParqetRateLimitError as err:
+        connection.send_error(
+            msg["id"],
+            "rate_limited",
+            f"Rate limit exceeded. Retry in {err.retry_after}s.",
+        )
+        return
     except ParqetApiError:
         connection.send_error(
             msg["id"], "api_error", "Failed to fetch performance data"
