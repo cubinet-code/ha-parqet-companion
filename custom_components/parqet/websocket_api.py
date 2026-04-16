@@ -101,7 +101,8 @@ async def ws_get_activities(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "parqet/get_performance",
-        vol.Required("entry_id"): str,
+        vol.Optional("entry_id"): str,
+        vol.Optional("entry_ids"): [str],
         vol.Optional("interval", default=DEFAULT_INTERVAL): str,
     }
 )
@@ -111,16 +112,36 @@ async def ws_get_performance(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Fetch performance data on demand with a specific interval."""
-    coordinator = _get_coordinator(hass, connection, msg)
-    if coordinator is None:
+    """Fetch performance data on demand with a specific interval.
+
+    Accepts either entry_id (single portfolio) or entry_ids (aggregated).
+    """
+    entry_ids = msg.get("entry_ids") or (
+        [msg["entry_id"]] if "entry_id" in msg else []
+    )
+    if not entry_ids:
+        connection.send_error(
+            msg["id"], "invalid_entry", "entry_id or entry_ids required"
+        )
         return
 
+    # Validate all entries and collect portfolio IDs.
+    portfolio_ids: list[str] = []
+    api = None
+    for eid in entry_ids:
+        entry = hass.config_entries.async_get_entry(eid)
+        if entry is None or entry.domain != DOMAIN:
+            connection.send_error(
+                msg["id"], "invalid_entry", f"Invalid config entry: {eid}"
+            )
+            return
+        coordinator = entry.runtime_data
+        portfolio_ids.append(coordinator.portfolio_id)
+        if api is None:
+            api = coordinator.api
+
     try:
-        data = await coordinator.api.async_get_performance(
-            [coordinator.portfolio_id],
-            msg["interval"],
-        )
+        data = await api.async_get_performance(portfolio_ids, msg["interval"])
     except ParqetApiError:
         connection.send_error(
             msg["id"], "api_error", "Failed to fetch performance data"

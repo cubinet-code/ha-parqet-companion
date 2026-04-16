@@ -53,16 +53,24 @@ export class ParqetActivitiesView extends LitElement {
     if (changed.has('portfolio')) void this._load();
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private _entryIds(): string[] {
+    const p = this.portfolio as any;
+    return p._entryIds ?? [this.portfolio.entryId];
+  }
+
   private async _loadHoldingsMap() {
     if (this._holdingsMap.size > 0) return;
     try {
-      const result = (await this.hass.connection.sendMessagePromise({
-        type: 'parqet/get_holdings',
-        entry_id: this.portfolio.entryId,
-      })) as { holdings: Holding[] };
       const map = new Map<string, string>();
-      for (const h of result.holdings || []) {
-        if (h.id) map.set(h.id, h.nickname ?? h.asset?.name ?? 'Unknown');
+      for (const eid of this._entryIds()) {
+        const result = (await this.hass.connection.sendMessagePromise({
+          type: 'parqet/get_holdings',
+          entry_id: eid,
+        })) as { holdings: Holding[] };
+        for (const h of result.holdings || []) {
+          if (h.id) map.set(h.id, h.nickname ?? h.asset?.name ?? 'Unknown');
+        }
       }
       this._holdingsMap = map;
     } catch { /* ignore — names will fall back */ }
@@ -77,30 +85,43 @@ export class ParqetActivitiesView extends LitElement {
     await this._loadHoldingsMap();
 
     try {
-      const params: Record<string, unknown> = {
-        type: 'parqet/get_activities',
-        entry_id: this.portfolio.entryId,
-        limit: this.config?.activities_limit ?? 25,
-      };
-      if (this._filter !== 'all') {
-        params['activity_type'] = [this._filter];
-      }
-      if (append && this._cursor) {
-        params['cursor'] = this._cursor;
+      const limit = this.config?.activities_limit ?? 25;
+      const allActivities: Activity[] = [];
+      let anyCursor: string | null = null;
+
+      for (const eid of this._entryIds()) {
+        const params: Record<string, unknown> = {
+          type: 'parqet/get_activities',
+          entry_id: eid,
+          limit,
+        };
+        if (this._filter !== 'all') {
+          params['activity_type'] = [this._filter];
+        }
+        if (append && this._cursor) {
+          params['cursor'] = this._cursor;
+        }
+
+        const result = (await this.hass.connection.sendMessagePromise(params)) as {
+          activities: Activity[];
+          cursor: string | null;
+        };
+        allActivities.push(...result.activities);
+        if (result.cursor) anyCursor = result.cursor;
       }
 
-      const result = (await this.hass.connection.sendMessagePromise(params)) as {
-        activities: Activity[];
-        cursor: string | null;
-      };
+      // Sort merged activities by date descending.
+      allActivities.sort(
+        (a, b) => new Date(b.datetime).getTime() - new Date(a.datetime).getTime(),
+      );
 
       if (append) {
-        this._activities = [...this._activities, ...result.activities];
+        this._activities = [...this._activities, ...allActivities];
       } else {
-        this._activities = result.activities;
+        this._activities = allActivities;
       }
-      this._cursor = result.cursor;
-      this._hasMore = !!result.cursor;
+      this._cursor = anyCursor;
+      this._hasMore = !!anyCursor;
     } catch {
       this._error = 'Failed to load activities';
     } finally {

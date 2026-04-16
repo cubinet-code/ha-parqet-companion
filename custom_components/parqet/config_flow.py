@@ -147,6 +147,12 @@ class ParqetOAuth2FlowHandler(
         if not portfolios:
             return self.async_abort(reason="no_portfolios")
 
+        # On reauth: the old token is invalidated, so clear old state and
+        # proceed as a fresh setup. This allows selecting any portfolio —
+        # including new ones that replaced the old.
+        if self.source == SOURCE_REAUTH:
+            await self._cleanup_reauth_entry()
+
         self._oauth_data = data
         self._portfolios = portfolios
 
@@ -154,6 +160,19 @@ class ParqetOAuth2FlowHandler(
             return await self._create_portfolio_entry(portfolios[0])
 
         return await self.async_step_pick_portfolio()
+
+    async def _cleanup_reauth_entry(self) -> None:
+        """Remove the old config entry and purge its snapshots."""
+        reauth_entry = self._get_reauth_entry()
+        entry_id = reauth_entry.entry_id
+
+        # Purge stored snapshots before removing the entry.
+        mgr_data = self.hass.data.get(DOMAIN, {}).get(entry_id)
+        if mgr_data and (snapshot_mgr := mgr_data.get("snapshot_manager")):
+            await snapshot_mgr.async_purge()
+
+        await self.hass.config_entries.async_remove(entry_id)
+        _LOGGER.debug("Reauth: removed old entry %s and purged snapshots", entry_id)
 
     async def async_step_pick_portfolio(
         self, user_input: dict[str, Any] | None = None
@@ -239,19 +258,6 @@ class ParqetOAuth2FlowHandler(
 
         unique_id = f"{self._user_id}_{portfolio_id}"
         await self.async_set_unique_id(unique_id)
-
-        if self.source == SOURCE_REAUTH:
-            self._abort_if_unique_id_mismatch()
-            return self.async_update_reload_and_abort(
-                self._get_reauth_entry(),
-                data_updates={
-                    **self._oauth_data,
-                    CONF_PORTFOLIO_ID: portfolio_id,
-                    CONF_PORTFOLIO_NAME: portfolio_name,
-                    CONF_CURRENCY: currency,
-                },
-            )
-
         self._abort_if_unique_id_configured()
 
         return self.async_create_entry(

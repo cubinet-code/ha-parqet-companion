@@ -42,11 +42,20 @@ export class ParqetPerformanceView extends LitElement {
     this._error = '';
 
     try {
-      const result = (await this.hass.connection.sendMessagePromise({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const p = this.portfolio as any;
+      const wsMsg: Record<string, unknown> = {
         type: 'parqet/get_performance',
-        entry_id: this.portfolio.entryId,
         interval: this._interval,
-      })) as { performance: PortfolioPerformance };
+      };
+      if (p._entryIds) {
+        wsMsg.entry_ids = p._entryIds;
+      } else {
+        wsMsg.entry_id = this.portfolio.entryId;
+      }
+      const result = (await this.hass.connection.sendMessagePromise(wsMsg)) as {
+        performance: PortfolioPerformance;
+      };
       if (gen !== this._fetchGen) return;
       this._wsData = result.performance;
     } catch {

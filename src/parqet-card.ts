@@ -39,7 +39,7 @@ export class ParqetCompanionCard extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @state() private _config!: ParqetCardConfig;
   @state() private _portfolios: DiscoveredPortfolio[] = [];
-  @state() private _selectedIndex = 0;
+  @state() private _selectedIndex = -1;
   @state() private _activeView: ViewType = 'performance';
   private _lastEntities: Hass['entities'] | undefined;
 
@@ -239,6 +239,13 @@ export class ParqetCompanionCard extends LitElement {
     const key = (ps: DiscoveredPortfolio[]) => [...ps.map((p) => p.entryId)].sort().join(',');
     if (key(discovered) !== key(this._portfolios)) {
       this._portfolios = discovered;
+      // Default: "All" (-1) when multiple portfolios with no device filter;
+      // first portfolio (0) when single or device-specific.
+      if (discovered.length <= 1 || this._config?.device_id) {
+        this._selectedIndex = 0;
+      } else {
+        this._selectedIndex = -1;
+      }
     }
   }
 
@@ -256,7 +263,11 @@ export class ParqetCompanionCard extends LitElement {
       `;
     }
 
-    const portfolio = this._portfolios[this._selectedIndex] || this._portfolios[0];
+    // Index -1 = "All Portfolios" (aggregated); 0+ = individual portfolios
+    const isAggregated = this._portfolios.length > 1 && this._selectedIndex === -1;
+    const portfolio = isAggregated
+      ? this._allPortfoliosProxy()
+      : this._portfolios[this._selectedIndex] || this._portfolios[0];
     const showTabs = true;
     const views: ViewType[] = ['performance', 'holdings', 'activities'];
 
@@ -266,6 +277,7 @@ export class ParqetCompanionCard extends LitElement {
           <div class="card-header">
             ${this._portfolios.length > 1 ? html`
               <select class="portfolio-select" @change=${this._onPortfolioChange}>
+                <option value="-1" ?selected=${this._selectedIndex === -1}>All Portfolios</option>
                 ${this._portfolios.map((p, i) => html`
                   <option value=${i} ?selected=${i === this._selectedIndex}>${p.name}</option>
                 `)}
@@ -322,6 +334,16 @@ export class ParqetCompanionCard extends LitElement {
         .config=${this._config}
       ></parqet-activities-view>
     `;
+  }
+
+  private _allPortfoliosProxy(): DiscoveredPortfolio {
+    return {
+      entryId: '__all__',
+      name: 'All Portfolios',
+      entityPrefix: null,
+      sensors: {},
+      _entryIds: this._portfolios.map((p) => p.entryId),
+    } as DiscoveredPortfolio & { _entryIds: string[] };
   }
 
   private _onPortfolioChange(e: Event) {
