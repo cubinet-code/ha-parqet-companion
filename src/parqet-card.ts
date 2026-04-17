@@ -50,6 +50,7 @@ export class ParqetCompanionCard extends LitElement {
   @state() private _dataError = '';
   @state() private _rateLimited = false;
   private _lastEntities: Hass['entities'] | undefined;
+  private _discoveryRan = false;
   private _fetchGen = 0;
   private _cachedProxy: DiscoveredPortfolio | null = null;
   private _cachedProxySource: DiscoveredPortfolio[] | null = null;
@@ -240,8 +241,10 @@ export class ParqetCompanionCard extends LitElement {
 
   private _discoverPortfolios() {
     if (!this.hass?.states) return;
-    // Skip if entity registry hasn't changed — avoids scanning on every state update
-    if (this.hass.entities === this._lastEntities) return;
+    // Skip only on subsequent calls with unchanged entities. The first call
+    // must always run, even when hass.entities is undefined (HA app case).
+    if (this._discoveryRan && this.hass.entities === this._lastEntities) return;
+    this._discoveryRan = true;
     this._lastEntities = this.hass.entities;
 
     const deviceId = this._config?.device_id;
