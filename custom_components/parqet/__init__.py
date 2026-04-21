@@ -20,9 +20,11 @@ from .const import (
     CONF_SNAPSHOT_ENABLED,
     CONF_SNAPSHOT_HOUR,
     CONF_SNAPSHOT_MINUTE,
+    CONF_SNAPSHOT_WEEKDAYS_ONLY,
     DEFAULT_INTERVAL,
     DEFAULT_SNAPSHOT_HOUR,
     DEFAULT_SNAPSHOT_MINUTE,
+    DEFAULT_SNAPSHOT_WEEKDAYS_ONLY,
     DOMAIN,
 )
 from .coordinator import ParqetDataUpdateCoordinator
@@ -114,6 +116,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ParqetConfigEntry) -> bo
                 entry.entry_id,
                 entry.options.get(CONF_SNAPSHOT_HOUR, DEFAULT_SNAPSHOT_HOUR),
                 entry.options.get(CONF_SNAPSHOT_MINUTE, DEFAULT_SNAPSHOT_MINUTE),
+                weekdays_only=entry.options.get(
+                    CONF_SNAPSHOT_WEEKDAYS_ONLY, DEFAULT_SNAPSHOT_WEEKDAYS_ONLY
+                ),
             )
             await snapshot_mgr.async_setup()
             hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {

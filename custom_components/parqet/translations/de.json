@@ -40,7 +40,8 @@
           "scan_interval": "Aktualisierungsintervall (Minuten)",
           "snapshot_enabled": "Tägliche Snapshots aktivieren",
           "snapshot_hour": "Snapshot-Stunde (0-23)",
-          "snapshot_minute": "Snapshot-Minute (0-59)"
+          "snapshot_minute": "Snapshot-Minute (0-59)",
+          "snapshot_weekdays_only": "Nur werktags (Mo-Fr) — Wochenenden werden übersprungen, Montag nutzt Freitags-Snapshot"
         }
       }
     }

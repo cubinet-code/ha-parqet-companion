@@ -38,10 +38,12 @@ from .const import (
     CONF_SNAPSHOT_ENABLED,
     CONF_SNAPSHOT_HOUR,
     CONF_SNAPSHOT_MINUTE,
+    CONF_SNAPSHOT_WEEKDAYS_ONLY,
     DEFAULT_INTERVAL,
     DEFAULT_SCAN_INTERVAL_MIN,
     DEFAULT_SNAPSHOT_HOUR,
     DEFAULT_SNAPSHOT_MINUTE,
+    DEFAULT_SNAPSHOT_WEEKDAYS_ONLY,
     DOMAIN,
     INTERVALS,
     MIN_SCAN_INTERVAL_MIN,
@@ -335,6 +337,9 @@ class ParqetOptionsFlowHandler(OptionsFlow):
         current_snapshot_minute = self.config_entry.options.get(
             CONF_SNAPSHOT_MINUTE, DEFAULT_SNAPSHOT_MINUTE
         )
+        current_snapshot_weekdays_only = self.config_entry.options.get(
+            CONF_SNAPSHOT_WEEKDAYS_ONLY, DEFAULT_SNAPSHOT_WEEKDAYS_ONLY
+        )
 
         interval_options = {v: v.upper() for v in INTERVALS}
 
@@ -357,6 +362,10 @@ class ParqetOptionsFlowHandler(OptionsFlow):
                     vol.Optional(
                         CONF_SNAPSHOT_MINUTE, default=current_snapshot_minute
                     ): vol.All(vol.Coerce(int), vol.Range(min=0, max=59)),
+                    vol.Optional(
+                        CONF_SNAPSHOT_WEEKDAYS_ONLY,
+                        default=current_snapshot_weekdays_only,
+                    ): bool,
                 }
             ),
         )

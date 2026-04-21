@@ -29,12 +29,14 @@ class SnapshotManager:
         entry_id: str,
         snapshot_hour: int,
         snapshot_minute: int,
+        weekdays_only: bool = True,
     ) -> None:
         self._hass = hass
         self._coordinator = coordinator
         self._entry_id = entry_id
         self._hour = snapshot_hour
         self._minute = snapshot_minute
+        self._weekdays_only = weekdays_only
         self._store = Store[dict[str, Any]](
             hass, STORAGE_VERSION, f"parqet_snapshots_{entry_id}"
         )
@@ -78,6 +80,14 @@ class SnapshotManager:
     async def _on_time(self, _now: datetime) -> None:
         """Callback fired daily at the configured time."""
         _LOGGER.debug("Daily snapshot timer fired at %s", _now.isoformat())
+        # weekday() uses the HA-configured timezone via dt_util.now()
+        # so the trading calendar matches the user's local timezone.
+        if self._weekdays_only and dt_util.now().weekday() >= 5:
+            _LOGGER.debug(
+                "Skipping snapshot on weekend (weekdays_only=True); "
+                "Monday will use Friday's last snapshot"
+            )
+            return
         try:
             await self.async_take_snapshot()
         except Exception:

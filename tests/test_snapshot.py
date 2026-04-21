@@ -177,6 +177,73 @@ class TestTakeSnapshot:
         mgr._store.async_save.assert_not_called()
 
 
+class TestWeekdayOnly:
+    """Test that weekday-only snapshots skip weekends."""
+
+    @pytest.mark.asyncio
+    async def test_on_time_skips_saturday_when_weekdays_only(self) -> None:
+        coordinator = _make_coordinator()
+        mgr = SnapshotManager(
+            _make_hass(), coordinator, "entry1", 22, 0, weekdays_only=True
+        )
+        mgr._store = AsyncMock()
+        mgr._data = {"snapshots": {}}
+
+        # Patch dt_util.now() to return a Saturday
+        with patch("custom_components.parqet.snapshot.dt_util") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 4, 18, 22, 0, tzinfo=timezone.utc)  # Saturday
+            await mgr._on_time(mock_dt.now.return_value)
+
+        coordinator.api.async_get_performance.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_on_time_skips_sunday_when_weekdays_only(self) -> None:
+        coordinator = _make_coordinator()
+        mgr = SnapshotManager(
+            _make_hass(), coordinator, "entry1", 22, 0, weekdays_only=True
+        )
+        mgr._store = AsyncMock()
+        mgr._data = {"snapshots": {}}
+
+        with patch("custom_components.parqet.snapshot.dt_util") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 4, 19, 22, 0, tzinfo=timezone.utc)  # Sunday
+            await mgr._on_time(mock_dt.now.return_value)
+
+        coordinator.api.async_get_performance.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_on_time_takes_snapshot_on_friday(self) -> None:
+        coordinator = _make_coordinator()
+        mgr = SnapshotManager(
+            _make_hass(), coordinator, "entry1", 22, 0, weekdays_only=True
+        )
+        mgr._store = AsyncMock()
+        mgr._data = {"snapshots": {}}
+
+        with patch("custom_components.parqet.snapshot.dt_util") as mock_dt:
+            friday = datetime(2026, 4, 17, 22, 0, tzinfo=timezone.utc)  # Friday
+            mock_dt.now.return_value = friday
+            await mgr._on_time(friday)
+
+        coordinator.api.async_get_performance.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_on_time_takes_snapshot_on_saturday_when_disabled(self) -> None:
+        coordinator = _make_coordinator()
+        mgr = SnapshotManager(
+            _make_hass(), coordinator, "entry1", 22, 0, weekdays_only=False
+        )
+        mgr._store = AsyncMock()
+        mgr._data = {"snapshots": {}}
+
+        with patch("custom_components.parqet.snapshot.dt_util") as mock_dt:
+            saturday = datetime(2026, 4, 18, 22, 0, tzinfo=timezone.utc)  # Saturday
+            mock_dt.now.return_value = saturday
+            await mgr._on_time(saturday)
+
+        coordinator.api.async_get_performance.assert_called_once()
+
+
 class TestPruning:
     """Test that old snapshots are pruned."""
 
