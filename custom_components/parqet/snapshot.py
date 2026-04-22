@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from calendar import SATURDAY
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -29,6 +30,7 @@ class SnapshotManager:
         entry_id: str,
         snapshot_hour: int,
         snapshot_minute: int,
+        *,
         weekdays_only: bool = True,
     ) -> None:
         self._hass = hass
@@ -80,9 +82,8 @@ class SnapshotManager:
     async def _on_time(self, _now: datetime) -> None:
         """Callback fired daily at the configured time."""
         _LOGGER.debug("Daily snapshot timer fired at %s", _now.isoformat())
-        # weekday() uses the HA-configured timezone via dt_util.now()
-        # so the trading calendar matches the user's local timezone.
-        if self._weekdays_only and dt_util.now().weekday() >= 5:
+        # _now is already in HA's configured timezone (trading calendar local).
+        if self._weekdays_only and _now.weekday() >= SATURDAY:
             _LOGGER.debug(
                 "Skipping snapshot on weekend (weekdays_only=True); "
                 "Monday will use Friday's last snapshot"
