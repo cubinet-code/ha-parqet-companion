@@ -29,6 +29,7 @@ from .const import (
 )
 from .coordinator import ParqetDataUpdateCoordinator
 from .frontend import async_register_frontend
+from .migration import async_migrate_entry as async_migrate_entry
 from .oauth import create_parqet_oauth_implementation
 from .snapshot import SnapshotManager
 from .snapshot_ws import async_register_snapshot_ws
