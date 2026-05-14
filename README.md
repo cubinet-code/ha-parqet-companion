@@ -76,7 +76,7 @@ Or manually:
 2. Search for **Parqet Companion**
 3. Sign in with your Parqet account (OAuth2 — no credentials stored in HA)
 4. Select which portfolios to track (all are selected by default)
-5. Each portfolio creates a device with sensors and a calendar entity
+5. The Parqet account is added as a single integration entry. Each selected portfolio becomes its own device with sensors and a calendar entity.
 
 ### Options
 
@@ -254,6 +254,8 @@ Daily P&L is shown starting the day after the first snapshot is taken.
 
 Seven WebSocket commands are available for advanced use cases and custom cards.
 
+> Every command takes `entry_id` (the Parqet account integration entry) plus a `portfolio_id` selector. `portfolio_id` may be omitted when the account has exactly one portfolio.
+
 ### `parqet/get_performance`
 
 Fetch performance data with a specific interval. Supports single or multi-portfolio aggregation.
@@ -262,16 +264,18 @@ Fetch performance data with a specific interval. Supports single or multi-portfo
 {
   "type": "parqet/get_performance",
   "entry_id": "<config_entry_id>",
+  "portfolio_id": "<portfolio_id>",
   "interval": "ytd"
 }
 ```
 
-For aggregated data across multiple portfolios, use `entry_ids` instead:
+To aggregate multiple portfolios within the same account, pass `portfolio_ids`:
 
 ```json
 {
   "type": "parqet/get_performance",
-  "entry_ids": ["<entry_id_1>", "<entry_id_2>"],
+  "entry_id": "<config_entry_id>",
+  "portfolio_ids": ["<portfolio_id_1>", "<portfolio_id_2>"],
   "interval": "ytd"
 }
 ```
@@ -283,7 +287,8 @@ Returns cached holdings data for a portfolio.
 ```json
 {
   "type": "parqet/get_holdings",
-  "entry_id": "<config_entry_id>"
+  "entry_id": "<config_entry_id>",
+  "portfolio_id": "<portfolio_id>"
 }
 ```
 
@@ -295,6 +300,7 @@ Fetch activities with optional filtering and pagination.
 {
   "type": "parqet/get_activities",
   "entry_id": "<config_entry_id>",
+  "portfolio_id": "<portfolio_id>",
   "activity_type": ["buy", "sell"],
   "limit": 50,
   "cursor": null
@@ -308,7 +314,8 @@ Returns daily P&L data computed from stored snapshots.
 ```json
 {
   "type": "parqet/get_snapshot",
-  "entry_id": "<config_entry_id>"
+  "entry_id": "<config_entry_id>",
+  "portfolio_id": "<portfolio_id>"
 }
 ```
 
@@ -319,7 +326,8 @@ Manually trigger a snapshot capture.
 ```json
 {
   "type": "parqet/take_snapshot",
-  "entry_id": "<config_entry_id>"
+  "entry_id": "<config_entry_id>",
+  "portfolio_id": "<portfolio_id>"
 }
 ```
 
@@ -330,7 +338,8 @@ Clear all stored snapshot data.
 ```json
 {
   "type": "parqet/purge_snapshots",
-  "entry_id": "<config_entry_id>"
+  "entry_id": "<config_entry_id>",
+  "portfolio_id": "<portfolio_id>"
 }
 ```
 
