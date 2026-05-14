@@ -24,9 +24,14 @@ MOCK_CONFIG_DATA = {
         "token_type": "Bearer",
         "expires_in": 3600,
     },
-    "portfolio_id": MOCK_PORTFOLIO_ID,
-    "portfolio_name": MOCK_PORTFOLIO_NAME,
-    "currency": MOCK_CURRENCY,
+    "user_id": MOCK_USER_ID,
+    "portfolio_ids": [MOCK_PORTFOLIO_ID],
+    "portfolio_meta": {
+        MOCK_PORTFOLIO_ID: {
+            "name": MOCK_PORTFOLIO_NAME,
+            "currency": MOCK_CURRENCY,
+        },
+    },
 }
 
 MOCK_USER_INFO = {
@@ -172,13 +177,13 @@ def auto_enable_custom_integrations(
 
 @pytest.fixture
 def mock_config_entry(hass: HomeAssistant) -> MockConfigEntry:
-    """Create a mock Parqet config entry."""
+    """Create a mock Parqet config entry (v2 account-scoped schema)."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         title=MOCK_PORTFOLIO_NAME,
         data=MOCK_CONFIG_DATA,
-        unique_id=f"{MOCK_USER_ID}_{MOCK_PORTFOLIO_ID}",
-        version=1,
+        unique_id=MOCK_USER_ID,
+        version=2,
         minor_version=1,
     )
     entry.add_to_hass(hass)

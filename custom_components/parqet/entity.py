@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_PORTFOLIO_ID, CONF_PORTFOLIO_NAME, DOMAIN
+from .const import DOMAIN
 from .coordinator import ParqetDataUpdateCoordinator
 
 if TYPE_CHECKING:
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class ParqetEntity(CoordinatorEntity[ParqetDataUpdateCoordinator]):
-    """Base class for Parqet entities."""
+    """Base class for Parqet entities (one device per portfolio)."""
 
     _attr_has_entity_name = True
 
@@ -23,14 +23,15 @@ class ParqetEntity(CoordinatorEntity[ParqetDataUpdateCoordinator]):
         self,
         coordinator: ParqetDataUpdateCoordinator,
         entry: ParqetConfigEntry,
+        portfolio_id: str,
+        portfolio_name: str,
     ) -> None:
-        """Initialize the entity."""
+        """Initialize the entity for a specific portfolio under the account entry."""
         super().__init__(coordinator)
-        portfolio_id = entry.data[CONF_PORTFOLIO_ID]
         self._portfolio_id = portfolio_id
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, portfolio_id)},
-            name=entry.data.get(CONF_PORTFOLIO_NAME, "Parqet Portfolio"),
+            name=portfolio_name,
             manufacturer="Parqet",
             entry_type=DeviceEntryType.SERVICE,
         )

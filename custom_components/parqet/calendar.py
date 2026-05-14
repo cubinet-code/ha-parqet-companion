@@ -13,6 +13,7 @@ from homeassistant.util import dt as dt_util
 
 from . import ParqetConfigEntry
 from .api import ParqetApiError
+from .const import CONF_PORTFOLIO_META
 from .coordinator import ParqetDataUpdateCoordinator
 from .entity import ParqetEntity
 
@@ -38,9 +39,23 @@ async def async_setup_entry(
     entry: ParqetConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Parqet calendar entity from a config entry."""
-    coordinator = entry.runtime_data
-    async_add_entities([ParqetActivityCalendar(coordinator, entry)])
+    """Set up a Parqet calendar entity for every portfolio in the account."""
+    runtime = entry.runtime_data
+    portfolio_meta: dict[str, dict[str, str]] = entry.data.get(
+        CONF_PORTFOLIO_META, {}
+    )
+
+    async_add_entities(
+        ParqetActivityCalendar(
+            coordinator,
+            entry,
+            portfolio_id=portfolio_id,
+            portfolio_name=portfolio_meta.get(portfolio_id, {}).get(
+                "name", portfolio_id
+            ),
+        )
+        for portfolio_id, coordinator in runtime.coordinators.items()
+    )
 
 
 def _resolve_asset_name(
@@ -131,10 +146,13 @@ class ParqetActivityCalendar(ParqetEntity, CalendarEntity):
         self,
         coordinator: ParqetDataUpdateCoordinator,
         entry: ParqetConfigEntry,
+        *,
+        portfolio_id: str,
+        portfolio_name: str,
     ) -> None:
         """Initialize the calendar entity."""
-        super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{self._portfolio_id}_activities"
+        super().__init__(coordinator, entry, portfolio_id, portfolio_name)
+        self._attr_unique_id = f"{portfolio_id}_activities"
         self._cached_events: list[CalendarEvent] = []
 
     @property

@@ -27,7 +27,7 @@ class SnapshotManager:
         self,
         hass: HomeAssistant,
         coordinator: ParqetDataUpdateCoordinator,
-        entry_id: str,
+        portfolio_id: str,
         snapshot_hour: int,
         snapshot_minute: int,
         *,
@@ -35,12 +35,12 @@ class SnapshotManager:
     ) -> None:
         self._hass = hass
         self._coordinator = coordinator
-        self._entry_id = entry_id
+        self.portfolio_id = portfolio_id
         self._hour = snapshot_hour
         self._minute = snapshot_minute
         self._weekdays_only = weekdays_only
         self._store = Store[dict[str, Any]](
-            hass, STORAGE_VERSION, f"parqet_snapshots_{entry_id}"
+            hass, STORAGE_VERSION, f"parqet_snapshots_{portfolio_id}"
         )
         self._data: dict[str, Any] = {"snapshots": {}}
         self._unsub: CALLBACK_TYPE | None = None
@@ -49,7 +49,7 @@ class SnapshotManager:
         """Load stored snapshots and register the daily time listener."""
         _LOGGER.debug(
             "Setting up snapshot manager for %s (time=%02d:%02d)",
-            self._entry_id, self._hour, self._minute,
+            self.portfolio_id, self._hour, self._minute,
         )
         stored = await self._store.async_load()
         if stored:

@@ -17,7 +17,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import ParqetConfigEntry
-from .const import CONF_CURRENCY
+from .const import CONF_PORTFOLIO_META
 from .coordinator import ParqetDataUpdateCoordinator
 from .entity import ParqetEntity
 
@@ -300,13 +300,30 @@ async def async_setup_entry(
     entry: ParqetConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Parqet sensor entities from a config entry."""
-    coordinator = entry.runtime_data
-
-    async_add_entities(
-        ParqetSensor(coordinator, entry, description)
-        for description in ALL_SENSORS
+    """Set up Parqet sensor entities for every portfolio under the account."""
+    runtime = entry.runtime_data
+    portfolio_meta: dict[str, dict[str, str]] = entry.data.get(
+        CONF_PORTFOLIO_META, {}
     )
+
+    entities: list[ParqetSensor] = []
+    for portfolio_id, coordinator in runtime.coordinators.items():
+        meta = portfolio_meta.get(portfolio_id, {})
+        portfolio_name = meta.get("name", portfolio_id)
+        currency = meta.get("currency", "EUR")
+        entities.extend(
+            ParqetSensor(
+                coordinator,
+                entry,
+                description,
+                portfolio_id=portfolio_id,
+                portfolio_name=portfolio_name,
+                currency=currency,
+            )
+            for description in ALL_SENSORS
+        )
+
+    async_add_entities(entities)
 
 
 class ParqetSensor(ParqetEntity, SensorEntity):
@@ -319,20 +336,21 @@ class ParqetSensor(ParqetEntity, SensorEntity):
         coordinator: ParqetDataUpdateCoordinator,
         entry: ParqetConfigEntry,
         description: ParqetSensorEntityDescription,
+        *,
+        portfolio_id: str,
+        portfolio_name: str,
+        currency: str,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator, entry)
+        super().__init__(coordinator, entry, portfolio_id, portfolio_name)
         self.entity_description = description
 
-        currency = entry.data.get(CONF_CURRENCY, "EUR")
-
         self._entry_id = entry.entry_id
-        self._attr_unique_id = f"{self._portfolio_id}_{description.key}"
+        self._attr_unique_id = f"{portfolio_id}_{description.key}"
         self._attr_entity_registry_enabled_default = (
             description.entity_registry_enabled_default
         )
 
-        # Set dynamic currency for monetary sensors.
         if description.device_class == SensorDeviceClass.MONETARY:
             self._attr_native_unit_of_measurement = currency
 

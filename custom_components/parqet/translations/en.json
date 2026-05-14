@@ -6,10 +6,10 @@
         "description": "Pick an authentication method to connect to your Parqet account."
       },
       "pick_portfolio": {
-        "title": "Select Portfolio",
-        "description": "Choose which portfolio to track as a Home Assistant device.",
+        "title": "Select Portfolios",
+        "description": "Choose which portfolios to track. Each portfolio shows up as its own device under this Parqet account.",
         "data": {
-          "portfolio_id": "Portfolio"
+          "portfolio_ids": "Portfolios"
         }
       },
       "reauth_confirm": {
@@ -23,7 +23,7 @@
       "unknown": "Unexpected error."
     },
     "abort": {
-      "already_configured": "This portfolio is already configured.",
+      "already_configured": "This Parqet account is already configured.",
       "cannot_connect": "Failed to connect to Parqet API.",
       "no_portfolios": "No portfolios found in your Parqet account.",
       "reauth_successful": "Re-authentication was successful.",

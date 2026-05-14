@@ -27,10 +27,15 @@ INTERVALS = [
 ]
 DEFAULT_INTERVAL = "max"
 
-# Config entry data keys
+# Config entry data keys (v1, retained for migration)
 CONF_PORTFOLIO_ID = "portfolio_id"
 CONF_PORTFOLIO_NAME = "portfolio_name"
 CONF_CURRENCY = "currency"
+
+# v2 config entry data keys
+CONF_USER_ID = "user_id"
+CONF_PORTFOLIO_IDS = "portfolio_ids"
+CONF_PORTFOLIO_META = "portfolio_meta"
 
 # Options
 CONF_INTERVAL = "interval"

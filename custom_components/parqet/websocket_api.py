@@ -1,9 +1,14 @@
-"""WebSocket API for Parqet."""
+"""WebSocket API for Parqet.
+
+Commands accept either:
+- `portfolio_id` + `entry_id` (preferred, unambiguous), or
+- `entry_id` alone (back-compat: only works for accounts with one portfolio).
+"""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
@@ -13,20 +18,60 @@ from .api import ParqetApiError, ParqetRateLimitError
 from .const import DEFAULT_INTERVAL, DOMAIN
 from .coordinator import ParqetDataUpdateCoordinator
 
+if TYPE_CHECKING:
+    from . import ParqetAccountRuntime
+
 _LOGGER = logging.getLogger(__name__)
 
 
-def _get_coordinator(
+def _resolve_runtime(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
-) -> ParqetDataUpdateCoordinator | None:
-    """Validate config entry and return its coordinator, or send error."""
+) -> ParqetAccountRuntime | None:
+    """Validate the config entry and return its runtime, or send error."""
     entry = hass.config_entries.async_get_entry(msg["entry_id"])
     if entry is None or entry.domain != DOMAIN:
         connection.send_error(msg["id"], "invalid_entry", "Invalid config entry")
         return None
     return entry.runtime_data
+
+
+def _resolve_coordinator(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> ParqetDataUpdateCoordinator | None:
+    """Resolve the coordinator for a specific portfolio under an account entry.
+
+    Falls back to the single-portfolio coordinator if `portfolio_id` is omitted
+    and the account only has one portfolio.
+    """
+    runtime = _resolve_runtime(hass, connection, msg)
+    if runtime is None:
+        return None
+
+    requested = msg.get("portfolio_id")
+    if requested is not None:
+        coordinator = runtime.coordinators.get(requested)
+        if coordinator is None:
+            connection.send_error(
+                msg["id"],
+                "invalid_portfolio",
+                f"Portfolio {requested!r} not found in account",
+            )
+            return None
+        return coordinator
+
+    if len(runtime.coordinators) == 1:
+        return next(iter(runtime.coordinators.values()))
+
+    connection.send_error(
+        msg["id"],
+        "invalid_portfolio",
+        "portfolio_id is required when the account has more than one portfolio",
+    )
+    return None
 
 
 def _send_rate_limit_error(
@@ -55,6 +100,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     {
         vol.Required("type"): "parqet/get_holdings",
         vol.Required("entry_id"): str,
+        vol.Optional("portfolio_id"): str,
     }
 )
 @callback
@@ -64,12 +110,11 @@ def ws_get_holdings(
     msg: dict[str, Any],
 ) -> None:
     """Return holdings from coordinator cached data."""
-    coordinator = _get_coordinator(hass, connection, msg)
+    coordinator = _resolve_coordinator(hass, connection, msg)
     if coordinator is None:
         return
 
     holdings = (coordinator.data or {}).get("holdings", [])
-
     connection.send_result(msg["id"], {"holdings": holdings})
 
 
@@ -78,6 +123,7 @@ def ws_get_holdings(
     {
         vol.Required("type"): "parqet/get_activities",
         vol.Required("entry_id"): str,
+        vol.Optional("portfolio_id"): str,
         vol.Optional("activity_type"): [str],
         vol.Optional("limit", default=25): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=500)
@@ -92,7 +138,7 @@ async def ws_get_activities(
     msg: dict[str, Any],
 ) -> None:
     """Fetch activities on demand from the Parqet API."""
-    coordinator = _get_coordinator(hass, connection, msg)
+    coordinator = _resolve_coordinator(hass, connection, msg)
     if coordinator is None:
         return
 
@@ -118,7 +164,8 @@ async def ws_get_activities(
     {
         vol.Required("type"): "parqet/get_performance",
         vol.Optional("entry_id"): str,
-        vol.Optional("entry_ids"): [str],
+        vol.Optional("portfolio_id"): str,
+        vol.Optional("portfolio_ids"): [str],
         vol.Optional("interval", default=DEFAULT_INTERVAL): str,
     }
 )
@@ -128,36 +175,52 @@ async def ws_get_performance(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Fetch performance data on demand with a specific interval.
+    """Fetch performance data on demand for one or more portfolios.
 
-    Accepts either entry_id (single portfolio) or entry_ids (aggregated).
+    Single portfolio: pass `entry_id` + `portfolio_id` (or just `entry_id`
+    if the account only has one portfolio).
+    Aggregated: pass `entry_id` + `portfolio_ids` (list).
     """
-    entry_ids = msg.get("entry_ids") or (
-        [msg["entry_id"]] if "entry_id" in msg else []
-    )
-    if not entry_ids:
+    entry_id = msg.get("entry_id")
+    if not entry_id:
         connection.send_error(
-            msg["id"], "invalid_entry", "entry_id or entry_ids required"
+            msg["id"], "invalid_entry", "entry_id is required"
         )
         return
 
-    # Validate all entries and collect portfolio IDs.
-    portfolio_ids: list[str] = []
-    api = None
-    for eid in entry_ids:
-        entry = hass.config_entries.async_get_entry(eid)
-        if entry is None or entry.domain != DOMAIN:
+    runtime = _resolve_runtime(hass, connection, {**msg, "entry_id": entry_id})
+    if runtime is None:
+        return
+
+    requested_ids: list[str] = msg.get("portfolio_ids") or []
+    if not requested_ids:
+        single = msg.get("portfolio_id")
+        if single is not None:
+            requested_ids = [single]
+        elif len(runtime.coordinators) == 1:
+            requested_ids = list(runtime.coordinators.keys())
+        else:
             connection.send_error(
-                msg["id"], "invalid_entry", f"Invalid config entry: {eid}"
+                msg["id"],
+                "invalid_portfolio",
+                "portfolio_id or portfolio_ids is required for accounts with "
+                "more than one portfolio",
             )
             return
-        coordinator = entry.runtime_data
-        portfolio_ids.append(coordinator.portfolio_id)
-        if api is None:
-            api = coordinator.api
+
+    unknown = [pid for pid in requested_ids if pid not in runtime.coordinators]
+    if unknown:
+        connection.send_error(
+            msg["id"],
+            "invalid_portfolio",
+            f"Unknown portfolio_id(s): {unknown}",
+        )
+        return
 
     try:
-        data = await api.async_get_performance(portfolio_ids, msg["interval"])
+        data = await runtime.api.async_get_performance(
+            requested_ids, msg["interval"]
+        )
     except ParqetRateLimitError as err:
         _send_rate_limit_error(connection, msg, err)
         return
@@ -188,7 +251,6 @@ async def ws_get_frontend_diagnostics(
     version = await hass.async_add_executor_job(_read_manifest_version)
     js_exists = await hass.async_add_executor_job(CARD_JS_PATH.exists)
 
-    # Check Lovelace resource registration.
     # hass.data["lovelace"] may be a dict or a dataclass depending on HA version.
     lovelace_info: dict[str, Any] = {"available": False}
     lovelace = hass.data.get("lovelace")
@@ -216,7 +278,6 @@ async def ws_get_frontend_diagnostics(
             except Exception as exc:
                 lovelace_info["error"] = str(exc)
 
-    # Config entries.
     entries = [
         {
             "entry_id": e.entry_id,

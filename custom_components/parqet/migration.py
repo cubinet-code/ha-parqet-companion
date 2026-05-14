@@ -29,7 +29,10 @@ from homeassistant.helpers.storage import Store
 from .const import (
     CONF_CURRENCY,
     CONF_PORTFOLIO_ID,
+    CONF_PORTFOLIO_IDS,
+    CONF_PORTFOLIO_META,
     CONF_PORTFOLIO_NAME,
+    CONF_USER_ID,
     DOMAIN,
 )
 
@@ -128,9 +131,9 @@ def build_v2_data(
     return {
         "auth_implementation": auth_implementation,
         "token": token,
-        "user_id": user_id,
-        "portfolio_ids": portfolio_ids,
-        "portfolio_meta": portfolio_meta,
+        CONF_USER_ID: user_id,
+        CONF_PORTFOLIO_IDS: portfolio_ids,
+        CONF_PORTFOLIO_META: portfolio_meta,
     }
 
 

@@ -1,4 +1,8 @@
-"""Config flow for Parqet integration."""
+"""Config flow for Parqet integration.
+
+v2 schema: one ConfigEntry per Parqet account, multiple portfolios as devices
+under that entry. See `migration.py` for the v1 → v2 upgrade path.
+"""
 
 from __future__ import annotations
 
@@ -30,15 +34,15 @@ from .api import (
     ParqetConnectionError,
 )
 from .const import (
-    CONF_CURRENCY,
     CONF_INTERVAL,
-    CONF_PORTFOLIO_ID,
-    CONF_PORTFOLIO_NAME,
+    CONF_PORTFOLIO_IDS,
+    CONF_PORTFOLIO_META,
     CONF_SCAN_INTERVAL,
     CONF_SNAPSHOT_ENABLED,
     CONF_SNAPSHOT_HOUR,
     CONF_SNAPSHOT_MINUTE,
     CONF_SNAPSHOT_WEEKDAYS_ONLY,
+    CONF_USER_ID,
     DEFAULT_INTERVAL,
     DEFAULT_SCAN_INTERVAL_MIN,
     DEFAULT_SNAPSHOT_HOUR,
@@ -60,7 +64,7 @@ class ParqetOAuth2FlowHandler(
     """Handle the Parqet OAuth2 config flow."""
 
     DOMAIN = DOMAIN
-    VERSION = 1
+    VERSION = 2
     MINOR_VERSION = 1
 
     @staticmethod
@@ -98,8 +102,8 @@ class ParqetOAuth2FlowHandler(
     async def _ensure_implementation(self) -> None:
         """Register the OAuth2 implementation if not already present.
 
-        This is needed when no config entries exist yet (first setup),
-        since async_setup only runs when entries are present.
+        Needed when no config entries exist yet (first setup), since
+        async_setup only runs when entries are present.
         """
         implementations = await config_entry_oauth2_flow.async_get_implementations(
             self.hass, DOMAIN
@@ -112,11 +116,7 @@ class ParqetOAuth2FlowHandler(
             )
 
     async def async_oauth_create_entry(self, data: dict) -> ConfigFlowResult:
-        """Create an entry after OAuth2 authorization.
-
-        Fetches portfolios and either auto-selects (if only one) or shows
-        a selection step.
-        """
+        """Resolve OAuth completion: discover portfolios, then prompt selection."""
         token = data.get("token", {})
         access_token = token.get("access_token", "")
 
@@ -137,11 +137,18 @@ class ParqetOAuth2FlowHandler(
             _LOGGER.exception("Failed to fetch Parqet data during setup")
             return self.async_abort(reason="unknown")
 
-        self._user_id = user_info.get("userId")
+        user_id = user_info.get("userId")
+        if not user_id:
+            _LOGGER.error("OAuth response missing userId; aborting")
+            return self.async_abort(reason="unknown")
+
+        self._user_id = user_id
+        self._oauth_data = data
+        self._portfolios = portfolios
 
         _LOGGER.debug(
             "OAuth complete: user=%s, permissions=%s, portfolios=%s",
-            self._user_id,
+            user_id,
             [p.get("resourceId") for p in user_info.get("permissions", [])],
             [f"{p.get('name')} ({p.get('id')})" for p in portfolios],
         )
@@ -149,96 +156,50 @@ class ParqetOAuth2FlowHandler(
         if not portfolios:
             return self.async_abort(reason="no_portfolios")
 
-        # On reauth: the old token is invalidated, so clear old state and
-        # proceed as a fresh setup. This allows selecting any portfolio —
-        # including new ones that replaced the old.
-        if self.source == SOURCE_REAUTH:
-            await self._cleanup_reauth_entry()
+        await self.async_set_unique_id(user_id)
 
-        self._oauth_data = data
-        self._portfolios = portfolios
+        if self.source == SOURCE_REAUTH:
+            # Reauth path: update the existing entry in place with the new
+            # token. Portfolio selection is not changed — that's a reconfigure
+            # concern, not a reauth concern.
+            reauth_entry = self._get_reauth_entry()
+            return self.async_update_reload_and_abort(
+                reauth_entry,
+                data_updates=data,
+            )
+
+        self._abort_if_unique_id_configured()
 
         if len(portfolios) == 1:
-            return await self._create_portfolio_entry(portfolios[0])
+            return await self._create_account_entry([portfolios[0]])
 
         return await self.async_step_pick_portfolio()
-
-    async def _cleanup_reauth_entry(self) -> None:
-        """Remove the old config entry and purge its snapshots."""
-        reauth_entry = self._get_reauth_entry()
-        entry_id = reauth_entry.entry_id
-
-        # Purge stored snapshots before removing the entry.
-        mgr_data = self.hass.data.get(DOMAIN, {}).get(entry_id)
-        if mgr_data and (snapshot_mgr := mgr_data.get("snapshot_manager")):
-            await snapshot_mgr.async_purge()
-
-        await self.hass.config_entries.async_remove(entry_id)
-        _LOGGER.debug("Reauth: removed old entry %s and purged snapshots", entry_id)
 
     async def async_step_pick_portfolio(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Let the user pick which portfolios to track."""
+        """Multi-select which portfolios to track under this account."""
         if user_input is not None:
-            selected_ids: list[str] = user_input[CONF_PORTFOLIO_ID]
+            selected_ids: list[str] = user_input[CONF_PORTFOLIO_IDS]
             selected = [
                 p for p in self._portfolios if p["id"] in selected_ids
             ]
-
             if not selected:
                 return self.async_abort(reason="unknown")
-
-            # Create additional entries for all but the last.
-            existing = {
-                entry.unique_id for entry in self._async_current_entries()
-            }
-            for portfolio in selected[:-1]:
-                portfolio_id = portfolio["id"]
-                unique_id = f"{self._user_id}_{portfolio_id}"
-                if unique_id in existing:
-                    continue
-                await self.hass.config_entries.flow.async_init(
-                    DOMAIN,
-                    context={"source": "batch_create"},
-                    data={
-                        "oauth_data": self._oauth_data,
-                        "user_id": self._user_id,
-                        CONF_PORTFOLIO_ID: portfolio_id,
-                        CONF_PORTFOLIO_NAME: portfolio["name"],
-                        CONF_CURRENCY: portfolio.get("currency", "EUR"),
-                    },
-                )
-
-            # The last entry is created normally to finish this flow.
-            return await self._create_portfolio_entry(selected[-1])
-
-        # Filter out already-configured portfolios.
-        configured_ids = {
-            entry.data.get(CONF_PORTFOLIO_ID)
-            for entry in self._async_current_entries()
-        }
-        available = [p for p in self._portfolios if p["id"] not in configured_ids]
-
-        if not available:
-            return self.async_abort(reason="already_configured")
-
-        if len(available) == 1:
-            return await self._create_portfolio_entry(available[0])
+            return await self._create_account_entry(selected)
 
         options = [
             SelectOptionDict(value=p["id"], label=p["name"])
-            for p in available
+            for p in self._portfolios
         ]
-        # Pre-select all by default.
-        default_ids = [p["id"] for p in available]
+        default_ids = [p["id"] for p in self._portfolios]
 
         return self.async_show_form(
             step_id="pick_portfolio",
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        CONF_PORTFOLIO_ID, default=default_ids
+                        CONF_PORTFOLIO_IDS, default=default_ids
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=options,
@@ -250,47 +211,32 @@ class ParqetOAuth2FlowHandler(
             ),
         )
 
-    async def _create_portfolio_entry(
-        self, portfolio: dict[str, Any]
+    async def _create_account_entry(
+        self, portfolios: list[dict[str, Any]]
     ) -> ConfigFlowResult:
-        """Create a config entry for the selected portfolio."""
-        portfolio_id = portfolio["id"]
-        portfolio_name = portfolio["name"]
-        currency = portfolio.get("currency", "EUR")
+        """Create the v2 account ConfigEntry covering the selected portfolios."""
+        portfolio_ids = [p["id"] for p in portfolios]
+        portfolio_meta = {
+            p["id"]: {
+                "name": p["name"],
+                "currency": p.get("currency", "EUR"),
+            }
+            for p in portfolios
+        }
 
-        unique_id = f"{self._user_id}_{portfolio_id}"
-        await self.async_set_unique_id(unique_id)
-        self._abort_if_unique_id_configured()
-
-        return self.async_create_entry(
-            title=portfolio_name,
-            data={
-                **self._oauth_data,
-                CONF_PORTFOLIO_ID: portfolio_id,
-                CONF_PORTFOLIO_NAME: portfolio_name,
-                CONF_CURRENCY: currency,
-            },
+        title = (
+            portfolios[0]["name"]
+            if len(portfolios) == 1
+            else f"Parqet ({len(portfolios)} portfolios)"
         )
 
-    async def async_step_batch_create(
-        self, data: dict[str, Any]
-    ) -> ConfigFlowResult:
-        """Handle batch portfolio creation from multi-select flow."""
-        user_id = data["user_id"]
-        portfolio_id = data[CONF_PORTFOLIO_ID]
-        oauth_data = data["oauth_data"]
-
-        unique_id = f"{user_id}_{portfolio_id}"
-        await self.async_set_unique_id(unique_id)
-        self._abort_if_unique_id_configured()
-
         return self.async_create_entry(
-            title=data[CONF_PORTFOLIO_NAME],
+            title=title,
             data={
-                **oauth_data,
-                CONF_PORTFOLIO_ID: portfolio_id,
-                CONF_PORTFOLIO_NAME: data[CONF_PORTFOLIO_NAME],
-                CONF_CURRENCY: data.get(CONF_CURRENCY, "EUR"),
+                **self._oauth_data,
+                CONF_USER_ID: self._user_id,
+                CONF_PORTFOLIO_IDS: portfolio_ids,
+                CONF_PORTFOLIO_META: portfolio_meta,
             },
         )
 
@@ -313,7 +259,7 @@ class ParqetOAuth2FlowHandler(
 
 
 class ParqetOptionsFlowHandler(OptionsFlow):
-    """Handle Parqet options."""
+    """Handle Parqet account options (apply to every portfolio in the entry)."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None

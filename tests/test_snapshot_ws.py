@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -40,22 +40,30 @@ MOCK_SNAPSHOT_DATA = {
 
 def _make_hass_with_snapshot_manager(
     entry_id: str = "entry1",
+    portfolio_id: str = "p1",
     snapshot_data: dict | None = None,
-) -> HomeAssistant:
-    """Create a mock hass with snapshot manager in hass.data."""
+) -> tuple[HomeAssistant, MagicMock]:
+    """Create a mock hass with a per-portfolio snapshot manager in hass.data."""
     hass = MagicMock(spec=HomeAssistant)
 
     mgr = MagicMock()
+    mgr.portfolio_id = portfolio_id
     mgr.get_snapshot_data.return_value = snapshot_data or MOCK_SNAPSHOT_DATA
     mgr.async_take_snapshot = AsyncMock(return_value={"holdings": {}, "total_value": 0})
     mgr.async_purge = AsyncMock()
 
-    # Mock config entry
+    coordinator = MagicMock()
+    coordinator.async_request_refresh = AsyncMock()
+
     entry = MagicMock()
     entry.domain = DOMAIN
+    entry.runtime_data = MagicMock()
+    entry.runtime_data.coordinators = {portfolio_id: coordinator}
     hass.config_entries.async_get_entry.return_value = entry
 
-    hass.data = {DOMAIN: {entry_id: {"snapshot_manager": mgr}}}
+    hass.data = {
+        DOMAIN: {entry_id: {"snapshot_managers": {portfolio_id: mgr}}}
+    }
     return hass, mgr
 
 
@@ -71,11 +79,6 @@ class TestWsGetSnapshot:
         hass, mgr = _make_hass_with_snapshot_manager()
         connection = _make_connection()
         msg = {"id": 1, "type": "parqet/get_snapshot", "entry_id": "entry1"}
-
-        # Mock the coordinator refresh (entry.runtime_data)
-        entry = hass.config_entries.async_get_entry.return_value
-        entry.runtime_data = MagicMock()
-        entry.runtime_data.async_request_refresh = AsyncMock()
 
         await _async_get_snapshot(hass, connection, msg)
 
