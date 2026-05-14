@@ -52,9 +52,19 @@ function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfoli
   const portfolios: DiscoveredPortfolio[] = [];
 
   for (const [devId, entries] of deviceGroups) {
-    // Get device name
-    const name = hass.devices?.[devId]?.name
-      ?? devId;
+    const device = hass.devices?.[devId];
+    const name = device?.name ?? devId;
+
+    // Device identifier is (parqet, portfolio_id) — this is the v2 mapping
+    // from device → portfolio. Falls back to state attributes if the device
+    // registry isn't available or the identifiers are atypical.
+    let portfolioId: string | null = null;
+    for (const [domain, value] of device?.identifiers ?? []) {
+      if (domain === 'parqet' && value) {
+        portfolioId = value;
+        break;
+      }
+    }
 
     // Build sensors dict using English keys derived from unique_id
     const sensors: Record<string, HassEntity> = {};
@@ -68,6 +78,9 @@ function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfoli
       if (!entryId && state.attributes?.['entry_id']) {
         entryId = state.attributes['entry_id'] as string;
       }
+      if (!portfolioId && state.attributes?.['portfolio_id']) {
+        portfolioId = state.attributes['portfolio_id'] as string;
+      }
 
       // Derive the English sensor key from unique_id (never translated)
       if (unique_id) {
@@ -78,10 +91,11 @@ function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfoli
       }
     }
 
-    if (!entryId) continue; // Skip devices with no resolvable entry_id
+    if (!entryId || !portfolioId) continue; // Need both to route WS calls
 
     portfolios.push({
       entryId,
+      portfolioId,
       name,
       entityPrefix: null,
       sensors,
@@ -116,12 +130,19 @@ function _discoverViaStateScan(hass: Hass, _deviceId?: string): DiscoveredPortfo
     if (Object.keys(sensors).length < 3) continue;
 
     const entryId = (attrs['entry_id'] as string) || prefix;
+    const portfolioId = (attrs['portfolio_id'] as string) || prefix;
     const name = (prefix.replace('sensor.', '') || 'Portfolio')
       .split('_')
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(' ');
 
-    portfolioMap.set(prefix, { entryId, name, entityPrefix: prefix, sensors });
+    portfolioMap.set(prefix, {
+      entryId,
+      portfolioId,
+      name,
+      entityPrefix: prefix,
+      sensors,
+    });
   }
 
   return Array.from(portfolioMap.values());

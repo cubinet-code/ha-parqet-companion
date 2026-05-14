@@ -148,10 +148,16 @@ export interface ParqetCardConfig {
 // ─── Discovered portfolio from HA entities ───────────────────────────────────
 
 export interface DiscoveredPortfolio {
+  /** Parqet account ConfigEntry (one per Parqet account in v2). */
   entryId: string;
+  /** Specific portfolio within the account. v2: one device per portfolio. */
+  portfolioId: string;
   name: string;
   entityPrefix: string | null; // null when discovered via entity registry
   sensors: Record<string, HassEntity>;
-  /** Present on the "All Portfolios" aggregate proxy. */
-  _entryIds?: string[];
+  /**
+   * Present on the "All Portfolios" aggregate proxy.
+   * Each entry is one (entryId, portfolioId) pair across discovered portfolios.
+   */
+  _portfolios?: Array<{ entryId: string; portfolioId: string }>;
 }

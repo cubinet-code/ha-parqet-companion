@@ -158,6 +158,7 @@ export class ParqetSnapshotCard extends LitElement {
       const result = (await this.hass.connection.sendMessagePromise({
         type: 'parqet/get_snapshot',
         entry_id: this._portfolio.entryId,
+        portfolio_id: this._portfolio.portfolioId,
       })) as SnapshotData;
       this._data = result;
     } catch (err: unknown) {

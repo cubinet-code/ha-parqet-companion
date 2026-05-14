@@ -54,6 +54,7 @@ function makeHass(): Hass {
 function makePortfolio(entryId = 'entry1'): DiscoveredPortfolio {
   return {
     entryId,
+    portfolioId: 'portfolio1',
     name: 'Test Portfolio',
     entityPrefix: null,
     sensors: {},

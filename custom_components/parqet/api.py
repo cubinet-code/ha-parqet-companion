@@ -103,6 +103,17 @@ class ParqetApiClient:
         except ParqetApiError:
             raise
         except aiohttp.ClientError as err:
+            # `aiohttp.ClientError` may originate from the OAuth token endpoint
+            # via `OAuth2Session.async_ensure_token_valid()` rather than the
+            # resource call this method is making. When it does, the failing
+            # URL is /oauth2/token, NOT `path`. Surface that explicitly so
+            # users see "Token refresh failed" instead of a misleading
+            # "Connection error POST /performance: …" (Issue #6).
+            failing_url = _failing_url(err)
+            if failing_url and failing_url.endswith("/oauth2/token"):
+                raise ParqetConnectionError(
+                    f"Token refresh failed before {method} {path}: {err}"
+                ) from err
             raise ParqetConnectionError(
                 f"Connection error {method} {path}: {err}"
             ) from err
@@ -162,6 +173,18 @@ class ParqetApiClient:
         return await self._get(
             f"/portfolios/{portfolio_id}/activities", params=params or None
         )
+
+
+def _failing_url(err: aiohttp.ClientError) -> str | None:
+    """Best-effort extraction of the URL path that produced an aiohttp error.
+
+    aiohttp attaches `request_info` on most ClientResponseError-derived
+    exceptions but not on every ClientError; return None when unavailable.
+    """
+    request_info = getattr(err, "request_info", None)
+    url = getattr(request_info, "url", None)
+    path = getattr(url, "path", None)
+    return path if isinstance(path, str) else None
 
 
 def _handle_response(resp: aiohttp.ClientResponse, body: bytes) -> Any:

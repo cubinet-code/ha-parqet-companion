@@ -409,11 +409,15 @@ export class ParqetCompanionCard extends LitElement {
       return this._cachedProxy;
     }
     this._cachedProxy = {
-      entryId: '__all__',
+      entryId: this._portfolios[0]?.entryId ?? '__all__',
+      portfolioId: '__all__',
       name: 'All Portfolios',
       entityPrefix: null,
       sensors: {},
-      _entryIds: this._portfolios.map((p) => p.entryId),
+      _portfolios: this._portfolios.map((p) => ({
+        entryId: p.entryId,
+        portfolioId: p.portfolioId,
+      })),
     };
     this._cachedProxySource = this._portfolios;
     return this._cachedProxy;

@@ -2,7 +2,7 @@ import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, Activity, ActivityType, Holding } from '../types';
-import { fmtCurrency, fmtDate, getEntryIds, isRateLimitError } from '../utils';
+import { fmtCurrency, fmtDate, getPortfolioRoutes, isRateLimitError } from '../utils';
 import '../components/loading-spinner';
 
 const ACTIVITY_TYPES: { value: string; label: string }[] = [
@@ -54,7 +54,7 @@ export class ParqetActivitiesView extends LitElement {
   }
 
   private _isAggregated(): boolean {
-    return (getEntryIds(this.portfolio).length > 1);
+    return (getPortfolioRoutes(this.portfolio).length > 1);
   }
 
   private async _loadHoldingsMap() {
@@ -62,10 +62,11 @@ export class ParqetActivitiesView extends LitElement {
     try {
       const map = new Map<string, string>();
       const results = await Promise.all(
-        getEntryIds(this.portfolio).map((eid) =>
+        getPortfolioRoutes(this.portfolio).map((r) =>
           this.hass.connection.sendMessagePromise({
             type: 'parqet/get_holdings',
-            entry_id: eid,
+            entry_id: r.entryId,
+            portfolio_id: r.portfolioId,
           }) as Promise<{ holdings: Holding[] }>,
         ),
       );
@@ -88,14 +89,15 @@ export class ParqetActivitiesView extends LitElement {
 
     try {
       const limit = this.config?.activities_limit ?? 25;
-      const eids = getEntryIds(this.portfolio);
+      const routes = getPortfolioRoutes(this.portfolio);
 
       // Fetch all portfolios in parallel.
       const results = await Promise.all(
-        eids.map((eid) => {
+        routes.map((route) => {
           const params: Record<string, unknown> = {
             type: 'parqet/get_activities',
-            entry_id: eid,
+            entry_id: route.entryId,
+            portfolio_id: route.portfolioId,
             limit,
           };
           if (this._filter !== 'all') {

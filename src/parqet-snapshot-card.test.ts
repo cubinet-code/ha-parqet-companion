@@ -79,6 +79,7 @@ function makeHass(response: unknown = MOCK_SNAPSHOT_RESPONSE): Hass {
 function makePortfolio(): DiscoveredPortfolio {
   return {
     entryId: 'entry1',
+    portfolioId: 'portfolio1',
     name: 'Test Portfolio',
     entityPrefix: 'sensor.test',
     sensors: {},

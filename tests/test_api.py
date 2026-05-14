@@ -106,6 +106,29 @@ class TestParqetApiClient:
         with pytest.raises(ParqetConnectionError):
             await client.async_get_user()
 
+    async def test_client_error_at_token_endpoint_labels_token_refresh(
+        self, mock_session: AsyncMock
+    ) -> None:
+        """A ClientError from /oauth2/token must say 'Token refresh failed',
+        not 'Connection error POST /performance' (Issue #6 side-fix).
+        """
+        from unittest.mock import MagicMock
+        from yarl import URL
+
+        request_info = MagicMock()
+        request_info.url = URL("https://connect.parqet.com/oauth2/token")
+        err = aiohttp.ClientError("invalid_grant")
+        err.request_info = request_info
+        mock_session.request.side_effect = err
+
+        client = ParqetApiClient(mock_session, "token")
+
+        with pytest.raises(ParqetConnectionError) as exc_info:
+            await client.async_get_performance(["p1"])
+
+        assert "Token refresh failed" in str(exc_info.value)
+        assert "/performance" in str(exc_info.value)  # destination still mentioned
+
     async def test_api_error_on_400(self, mock_session: AsyncMock) -> None:
         """Test that 400 raises ParqetApiError."""
         resp = _make_response(400, b'{"error": "bad request"}')

@@ -63,7 +63,13 @@ function makeHass(): Hass {
 }
 
 function makePortfolio(entryId = 'entry1'): DiscoveredPortfolio {
-  return { entryId, name: 'Test Portfolio', entityPrefix: null, sensors: {} };
+  return {
+    entryId,
+    portfolioId: 'portfolio1',
+    name: 'Test Portfolio',
+    entityPrefix: null,
+    sensors: {},
+  };
 }
 
 function makeConfig(overrides: Partial<ParqetCardConfig> = {}): ParqetCardConfig {
