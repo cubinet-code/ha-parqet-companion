@@ -159,12 +159,8 @@ class ParqetOAuth2FlowHandler(
         await self.async_set_unique_id(user_id)
 
         if self.source == SOURCE_REAUTH:
-            # Reauth path: update the existing entry in place with the new
-            # token. Portfolio selection is not changed — that's a reconfigure
-            # concern, not a reauth concern.
-            reauth_entry = self._get_reauth_entry()
             return self.async_update_reload_and_abort(
-                reauth_entry,
+                self._get_reauth_entry(),
                 data_updates=data,
             )
 

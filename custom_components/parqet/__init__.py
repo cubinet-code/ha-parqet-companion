@@ -7,6 +7,7 @@ All portfolios share a single OAuth2Session so token refresh is atomic
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 
@@ -114,25 +115,27 @@ async def async_setup_entry(
     scan_interval_min = entry.options.get(CONF_SCAN_INTERVAL)
 
     runtime = ParqetAccountRuntime(api=api)
-
     for portfolio_id in portfolio_ids:
         meta = portfolio_meta.get(portfolio_id, {})
-        portfolio_name = meta.get("name", portfolio_id)
-        coordinator = ParqetDataUpdateCoordinator(
+        runtime.coordinators[portfolio_id] = ParqetDataUpdateCoordinator(
             hass,
             api,
             portfolio_id,
-            portfolio_name,
+            meta.get("name", portfolio_id),
             interval,
             scan_interval_min,
             config_entry=entry,
         )
-        await coordinator.async_config_entry_first_refresh()
-        runtime.coordinators[portfolio_id] = coordinator
+
+    # All coordinators share one OAuth2Session; refresh races are serialised by
+    # its `_token_lock`. Parallelising first refresh cuts setup latency from
+    # N x API round-trip to ~1.
+    await asyncio.gather(
+        *(c.async_config_entry_first_refresh() for c in runtime.coordinators.values())
+    )
 
     entry.runtime_data = runtime
 
-    # Set up daily snapshot manager for each portfolio if globally enabled.
     if entry.options.get(CONF_SNAPSHOT_ENABLED, False):
         snapshot_hour = entry.options.get(
             CONF_SNAPSHOT_HOUR, DEFAULT_SNAPSHOT_HOUR
@@ -164,11 +167,6 @@ async def async_setup_entry(
                     "Failed to set up snapshot manager for portfolio %s",
                     portfolio_id,
                 )
-        # Mirror into hass.data so cleanup paths (reauth, unload) can find the
-        # managers by entry_id, matching the v1 layout consumers expect.
-        hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
-            "snapshot_managers": runtime.snapshot_managers,
-        }
     else:
         _LOGGER.debug("Snapshots not enabled for %s", entry.entry_id)
 
@@ -190,8 +188,9 @@ async def async_unload_entry(
     hass: HomeAssistant, entry: ParqetConfigEntry
 ) -> bool:
     """Unload a Parqet config entry."""
-    if mgr_data := hass.data.get(DOMAIN, {}).pop(entry.entry_id, None):
-        for snapshot_mgr in mgr_data.get("snapshot_managers", {}).values():
+    runtime = entry.runtime_data
+    if runtime is not None:
+        for snapshot_mgr in runtime.snapshot_managers.values():
             await snapshot_mgr.async_teardown()
 
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

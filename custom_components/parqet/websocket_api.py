@@ -37,41 +37,54 @@ def _resolve_runtime(
     return entry.runtime_data
 
 
-def _resolve_coordinator(
-    hass: HomeAssistant,
+def pick_by_portfolio[T](
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
-) -> ParqetDataUpdateCoordinator | None:
-    """Resolve the coordinator for a specific portfolio under an account entry.
+    mapping: dict[str, T],
+    *,
+    not_found_label: str,
+) -> T | None:
+    """Pick a value from `mapping` keyed by `msg["portfolio_id"]`.
 
-    Falls back to the single-portfolio coordinator if `portfolio_id` is omitted
-    and the account only has one portfolio.
+    Falls back to the single-element value when `portfolio_id` is omitted and
+    `mapping` has exactly one entry; sends a WS error and returns None
+    otherwise. Used by both the API and snapshot WebSocket handlers — keeping
+    the routing rule in one place avoids drift across modules.
     """
-    runtime = _resolve_runtime(hass, connection, msg)
-    if runtime is None:
-        return None
-
     requested = msg.get("portfolio_id")
     if requested is not None:
-        coordinator = runtime.coordinators.get(requested)
-        if coordinator is None:
+        value = mapping.get(requested)
+        if value is None:
             connection.send_error(
                 msg["id"],
                 "invalid_portfolio",
-                f"Portfolio {requested!r} not found in account",
+                f"{not_found_label} for portfolio {requested!r}",
             )
             return None
-        return coordinator
-
-    if len(runtime.coordinators) == 1:
-        return next(iter(runtime.coordinators.values()))
-
+        return value
+    if len(mapping) == 1:
+        return next(iter(mapping.values()))
     connection.send_error(
         msg["id"],
         "invalid_portfolio",
         "portfolio_id is required when the account has more than one portfolio",
     )
     return None
+
+
+def _resolve_coordinator(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> ParqetDataUpdateCoordinator | None:
+    """Resolve the coordinator for a specific portfolio under an account entry."""
+    runtime = _resolve_runtime(hass, connection, msg)
+    if runtime is None:
+        return None
+    return pick_by_portfolio(
+        connection, msg, runtime.coordinators,
+        not_found_label="No coordinator",
+    )
 
 
 def _send_rate_limit_error(
@@ -163,7 +176,7 @@ async def ws_get_activities(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "parqet/get_performance",
-        vol.Optional("entry_id"): str,
+        vol.Required("entry_id"): str,
         vol.Optional("portfolio_id"): str,
         vol.Optional("portfolio_ids"): [str],
         vol.Optional("interval", default=DEFAULT_INTERVAL): str,
@@ -181,14 +194,7 @@ async def ws_get_performance(
     if the account only has one portfolio).
     Aggregated: pass `entry_id` + `portfolio_ids` (list).
     """
-    entry_id = msg.get("entry_id")
-    if not entry_id:
-        connection.send_error(
-            msg["id"], "invalid_entry", "entry_id is required"
-        )
-        return
-
-    runtime = _resolve_runtime(hass, connection, {**msg, "entry_id": entry_id})
+    runtime = _resolve_runtime(hass, connection, msg)
     if runtime is None:
         return
 

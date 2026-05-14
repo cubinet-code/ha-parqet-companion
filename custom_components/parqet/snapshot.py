@@ -35,7 +35,7 @@ class SnapshotManager:
     ) -> None:
         self._hass = hass
         self._coordinator = coordinator
-        self.portfolio_id = portfolio_id
+        self._portfolio_id = portfolio_id
         self._hour = snapshot_hour
         self._minute = snapshot_minute
         self._weekdays_only = weekdays_only
@@ -49,7 +49,7 @@ class SnapshotManager:
         """Load stored snapshots and register the daily time listener."""
         _LOGGER.debug(
             "Setting up snapshot manager for %s (time=%02d:%02d)",
-            self.portfolio_id, self._hour, self._minute,
+            self._portfolio_id, self._hour, self._minute,
         )
         stored = await self._store.async_load()
         if stored:

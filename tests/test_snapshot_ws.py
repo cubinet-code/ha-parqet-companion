@@ -43,11 +43,10 @@ def _make_hass_with_snapshot_manager(
     portfolio_id: str = "p1",
     snapshot_data: dict | None = None,
 ) -> tuple[HomeAssistant, MagicMock]:
-    """Create a mock hass with a per-portfolio snapshot manager in hass.data."""
+    """Create a mock hass + entry whose runtime exposes one snapshot manager."""
     hass = MagicMock(spec=HomeAssistant)
 
     mgr = MagicMock()
-    mgr.portfolio_id = portfolio_id
     mgr.get_snapshot_data.return_value = snapshot_data or MOCK_SNAPSHOT_DATA
     mgr.async_take_snapshot = AsyncMock(return_value={"holdings": {}, "total_value": 0})
     mgr.async_purge = AsyncMock()
@@ -57,13 +56,13 @@ def _make_hass_with_snapshot_manager(
 
     entry = MagicMock()
     entry.domain = DOMAIN
+    entry.entry_id = entry_id
     entry.runtime_data = MagicMock()
     entry.runtime_data.coordinators = {portfolio_id: coordinator}
+    entry.runtime_data.snapshot_managers = {portfolio_id: mgr}
     hass.config_entries.async_get_entry.return_value = entry
 
-    hass.data = {
-        DOMAIN: {entry_id: {"snapshot_managers": {portfolio_id: mgr}}}
-    }
+    hass.data = {}
     return hass, mgr
 
 
@@ -90,8 +89,10 @@ class TestWsGetSnapshot:
         hass = MagicMock(spec=HomeAssistant)
         entry = MagicMock()
         entry.domain = DOMAIN
+        entry.runtime_data = MagicMock()
+        entry.runtime_data.snapshot_managers = {}
         hass.config_entries.async_get_entry.return_value = entry
-        hass.data = {}  # No snapshot manager registered
+        hass.data = {}
 
         connection = _make_connection()
         msg = {"id": 1, "type": "parqet/get_snapshot", "entry_id": "entry1"}

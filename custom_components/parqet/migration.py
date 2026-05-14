@@ -17,6 +17,7 @@ per-portfolio so 7-day rolling history survives.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any
@@ -174,19 +175,36 @@ def reassociate_devices(
     """
     if from_entry_id == to_entry_id:
         return 0
+    return reassociate_devices_bulk(hass, {from_entry_id: to_entry_id})
+
+
+def reassociate_devices_bulk(
+    hass: HomeAssistant,
+    moves: dict[str, str],
+) -> int:
+    """Reassociate Parqet devices across many (from → to) entry pairs in one pass.
+
+    Scans the device registry once instead of per source entry — keeps migration
+    cost O(devices) rather than O(siblings * devices).
+    """
+    # Skip self-mappings; they would be no-ops anyway.
+    real_moves = {src: dst for src, dst in moves.items() if src != dst}
+    if not real_moves:
+        return 0
     registry = dr.async_get(hass)
     moved = 0
     for device in list(registry.devices.values()):
-        if from_entry_id not in device.config_entries:
-            continue
         if not any(ident[0] == DOMAIN for ident in device.identifiers):
             continue
-        registry.async_update_device(
-            device.id,
-            add_config_entry_id=to_entry_id,
-            remove_config_entry_id=from_entry_id,
-        )
-        moved += 1
+        # A device may belong to only one source entry in practice, but iterate
+        # so we cover the (unlikely) case of a device linked to multiple v1 siblings.
+        for src in device.config_entries & real_moves.keys():
+            registry.async_update_device(
+                device.id,
+                add_config_entry_id=real_moves[src],
+                remove_config_entry_id=src,
+            )
+            moved += 1
     return moved
 
 
@@ -195,16 +213,10 @@ async def async_migrate_entry(
 ) -> bool:
     """Migrate a v1 per-portfolio ConfigEntry to the v2 per-account schema.
 
-    The first call for a sibling group performs the full merge: builds the
-    v2 data on the deterministic primary, renames per-entry snapshot stores
-    to per-portfolio, re-associates devices to the primary, then removes
-    the now-empty sibling entries. Subsequent calls — on entries that
-    happen to still be queued for migration — short-circuit because the
-    primary's removal already deleted them or this is already the primary
-    on a re-run.
-
-    Returns True when the entry is now v2 (either freshly migrated or
-    already absorbed), False on unrecoverable errors.
+    Folds every v1 sibling (same user_id prefix) into one v2 primary entry.
+    Idempotent: the deterministic primary's call performs the merge; calls on
+    non-primary siblings short-circuit (they will be removed by the primary).
+    Returns True on success, False only on unrecoverable errors.
     """
     if entry.version >= 2:
         return True
@@ -219,16 +231,14 @@ async def async_migrate_entry(
         return False
 
     # Stale-sibling cleanup: if migration already produced a v2 entry for this
-    # user, this v1 entry was missed by the previous removal pass. Remove it.
+    # user, this v1 entry was missed by the previous removal pass.
     for existing in hass.config_entries.async_entries(DOMAIN):
         if existing.version >= 2 and existing.unique_id == user_id:
             _LOGGER.debug(
                 "v2 entry already exists for user %s; removing stale v1 %s",
                 user_id, entry.entry_id,
             )
-            hass.async_create_task(
-                hass.config_entries.async_remove(entry.entry_id)
-            )
+            await hass.config_entries.async_remove(entry.entry_id)
             return False
 
     siblings = find_v1_siblings(hass, user_id)
@@ -240,11 +250,6 @@ async def async_migrate_entry(
         return False
 
     primary = pick_primary(siblings)
-
-    # Only the primary's call performs the merge. If a non-primary lands here
-    # first (concurrent migrate calls), let it succeed — the primary's call
-    # will remove this entry shortly. If the primary ran first, this entry is
-    # already gone before HA reaches it.
     if entry.entry_id != primary.entry_id:
         return True
 
@@ -266,24 +271,26 @@ async def async_migrate_entry(
         token=best_token,
     )
 
-    for s in siblings:
-        portfolio_id = s.data.get(CONF_PORTFOLIO_ID)
-        if not portfolio_id:
-            continue
-        await rename_snapshot_store(
+    rename_tasks = [
+        rename_snapshot_store(
             hass,
             old_key=f"parqet_snapshots_{s.entry_id}",
             new_key=f"parqet_snapshots_{portfolio_id}",
         )
+        for s in siblings
+        if (portfolio_id := s.data.get(CONF_PORTFOLIO_ID))
+    ]
+    if rename_tasks:
+        await asyncio.gather(*rename_tasks)
 
-    for s in siblings:
-        if s.entry_id == primary.entry_id:
-            continue
-        reassociate_devices(
-            hass,
-            from_entry_id=s.entry_id,
-            to_entry_id=primary.entry_id,
-        )
+    reassociate_devices_bulk(
+        hass,
+        {
+            s.entry_id: primary.entry_id
+            for s in siblings
+            if s.entry_id != primary.entry_id
+        },
+    )
 
     hass.config_entries.async_update_entry(
         primary,
@@ -293,10 +300,13 @@ async def async_migrate_entry(
         minor_version=1,
     )
 
-    for s in siblings:
-        if s.entry_id == primary.entry_id:
-            continue
-        await hass.config_entries.async_remove(s.entry_id)
+    removals = [
+        hass.config_entries.async_remove(s.entry_id)
+        for s in siblings
+        if s.entry_id != primary.entry_id
+    ]
+    if removals:
+        await asyncio.gather(*removals)
 
     if not is_valid:
         _LOGGER.info(
