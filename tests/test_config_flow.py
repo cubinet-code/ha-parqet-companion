@@ -117,3 +117,102 @@ async def test_reauth_updates_token_in_place(
     assert refreshed.data["portfolio_ids"] == original_portfolio_ids
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
+
+
+# ─── Reconfigure flow (re-pick portfolios without re-authenticating) ──────────
+
+
+async def _start_reconfigure(
+    hass: HomeAssistant, entry: MockConfigEntry, live_portfolios: list[dict]
+) -> dict:
+    """Drive `async_step_reconfigure` with a mocked API listing `live_portfolios`."""
+    with (
+        patch(
+            "custom_components.parqet.config_flow.config_entry_oauth2_flow"
+            ".async_get_config_entry_implementation",
+            return_value=AsyncMock(),
+        ),
+        patch(
+            "custom_components.parqet.config_flow.config_entry_oauth2_flow.OAuth2Session",
+            return_value=AsyncMock(token={"access_token": "valid"}),
+        ),
+        patch(
+            "custom_components.parqet.config_flow.aiohttp_client.async_get_clientsession",
+        ),
+        patch(
+            "custom_components.parqet.config_flow.ParqetApiClient",
+        ) as mock_api_cls,
+    ):
+        mock_api = mock_api_cls.return_value
+        mock_api.async_list_portfolios = AsyncMock(return_value=live_portfolios)
+        return await entry.start_reconfigure_flow(hass)
+
+
+async def test_reconfigure_shows_picker_with_current_selection_preticked(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Opening Reconfigure should land on the portfolio picker step."""
+    new_portfolio = {"id": "new_pid_999", "name": "New One", "currency": "EUR"}
+    result = await _start_reconfigure(
+        hass,
+        mock_config_entry,
+        live_portfolios=[
+            {
+                "id": MOCK_PORTFOLIO_ID,
+                "name": MOCK_PORTFOLIO_NAME,
+                "currency": "EUR",
+            },
+            new_portfolio,
+        ],
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "pick_portfolio"
+
+
+async def test_reconfigure_updates_entry_with_new_selection(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Picking a different set of portfolios rewrites entry.data, keeps token."""
+    original_token = mock_config_entry.data["token"]
+    new_portfolio = {"id": "new_pid_999", "name": "New One", "currency": "EUR"}
+
+    result = await _start_reconfigure(
+        hass,
+        mock_config_entry,
+        live_portfolios=[
+            {
+                "id": MOCK_PORTFOLIO_ID,
+                "name": MOCK_PORTFOLIO_NAME,
+                "currency": "EUR",
+            },
+            new_portfolio,
+        ],
+    )
+    submission = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={"portfolio_ids": ["new_pid_999"]},
+    )
+
+    assert submission["type"] is FlowResultType.ABORT
+    assert submission["reason"] == "reconfigure_successful"
+
+    updated = hass.config_entries.async_get_entry(mock_config_entry.entry_id)
+    assert updated.data["portfolio_ids"] == ["new_pid_999"]
+    assert "new_pid_999" in updated.data["portfolio_meta"]
+    # Token is preserved — reconfigure must not force a re-auth.
+    assert updated.data["token"] == original_token
+
+
+async def test_reconfigure_aborts_when_account_has_no_portfolios(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """If Parqet has zero portfolios, abort with `no_portfolios` (not a blank picker)."""
+    result = await _start_reconfigure(
+        hass, mock_config_entry, live_portfolios=[]
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "no_portfolios"

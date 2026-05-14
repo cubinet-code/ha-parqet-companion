@@ -25,10 +25,14 @@
     "abort": {
       "already_configured": "Dieses Parqet-Konto ist bereits konfiguriert.",
       "cannot_connect": "Verbindung zur Parqet-API fehlgeschlagen.",
-      "no_portfolios": "Keine Portfolios in deinem Parqet-Konto gefunden.",
+      "no_portfolios": "Keine Portfolios in deinem Parqet-Konto gefunden. Lege mindestens ein Portfolio auf app.parqet.com an und versuche es erneut.",
+      "reauth_required": "Dein gespeichertes Parqet-Token ist nicht mehr gültig. Bitte nutze stattdessen die erneute Anmeldung.",
       "reauth_successful": "Erneute Authentifizierung war erfolgreich.",
+      "reconfigure_successful": "Portfolios aktualisiert.",
       "unknown": "Unerwarteter Fehler.",
-      "oauth_error": "Fehler beim Empfang des Zugriffstokens."
+      "oauth_error": "Fehler beim Empfang des Zugriffstokens.",
+      "oauth_unauthorized": "Parqet hat die Anmeldung abgelehnt. Der Autorisierungscode wurde möglicherweise bereits verwendet — bitte versuche es erneut in einem einzelnen Browser-Tab.",
+      "oauth_failed": "Parqet hat die Anmeldung abgelehnt. Bitte versuche, die Integration erneut hinzuzufügen."
     }
   },
   "options": {
@@ -44,6 +48,12 @@
           "snapshot_weekdays_only": "Nur werktags (Mo-Fr) — Wochenenden werden übersprungen, Montag nutzt Freitags-Snapshot"
         }
       }
+    }
+  },
+  "issues": {
+    "portfolio_deleted": {
+      "title": "Portfolio \"{portfolio_name}\" auf Parqet entfernt",
+      "description": "Das Portfolio \"{portfolio_name}\", das durch \"{entry_title}\" verfolgt wurde, ist nicht mehr in deinem Parqet-Konto vorhanden. Es wurde aus dieser Integration entfernt, damit Aktualisierungen nicht mehr fehlschlagen. Falls das unbeabsichtigt war: Stelle das Portfolio bei Parqet wieder her und konfiguriere die Integration neu."
     }
   },
   "entity": {

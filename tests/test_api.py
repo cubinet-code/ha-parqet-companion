@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 import pytest
-
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from custom_components.parqet.api import (
+    ParqetAccessDeniedError,
     ParqetApiClient,
     ParqetApiError,
     ParqetAuthError,
@@ -76,14 +76,23 @@ class TestParqetApiClient:
             await client.async_get_user()
 
     async def test_permission_error_on_403(self, mock_session: AsyncMock) -> None:
-        """Test that 403 raises ParqetApiError (not auth — reauth won't help)."""
+        """Test that 403 raises ParqetAccessDeniedError (subclass of ParqetApiError).
+
+        Distinct from 401 because the token is valid — the user must reconfigure
+        which portfolios are tracked, not re-authenticate.
+        """
         resp = _make_response(403, b"Forbidden")
         mock_session.request.return_value.__aenter__.return_value = resp
 
         client = ParqetApiClient(mock_session, "bad_token")
 
-        with pytest.raises(ParqetApiError, match="Insufficient permissions"):
+        with pytest.raises(ParqetAccessDeniedError, match="Access denied"):
             await client.async_get_user()
+
+        # Subclass relationship preserves any existing `except ParqetApiError`
+        # handlers — they keep catching this, just with more specific typing
+        # available when needed.
+        assert issubclass(ParqetAccessDeniedError, ParqetApiError)
 
     async def test_server_error_on_500(self, mock_session: AsyncMock) -> None:
         """Test that 500 raises ParqetConnectionError."""
@@ -113,6 +122,7 @@ class TestParqetApiClient:
         not 'Connection error POST /performance' (Issue #6 side-fix).
         """
         from unittest.mock import MagicMock
+
         from yarl import URL
 
         request_info = MagicMock()

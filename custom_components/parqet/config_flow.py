@@ -14,6 +14,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.config_entries import (
     SOURCE_REAUTH,
+    SOURCE_RECONFIGURE,
     ConfigEntry,
     ConfigFlowResult,
     OptionsFlow,
@@ -174,7 +175,12 @@ class ParqetOAuth2FlowHandler(
     async def async_step_pick_portfolio(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Multi-select which portfolios to track under this account."""
+        """Multi-select which portfolios to track under this account.
+
+        Shared by initial setup and the reconfigure flow — on submit the
+        source decides whether to create a new entry or update the existing
+        one in place.
+        """
         if user_input is not None:
             selected_ids: list[str] = user_input[CONF_PORTFOLIO_IDS]
             selected = [
@@ -182,13 +188,29 @@ class ParqetOAuth2FlowHandler(
             ]
             if not selected:
                 return self.async_abort(reason="unknown")
+            if self.source == SOURCE_RECONFIGURE:
+                return self._update_account_entry(
+                    self._get_reconfigure_entry(), selected
+                )
             return await self._create_account_entry(selected)
+
+        # In reconfigure mode, pre-tick portfolios that are currently tracked
+        # AND still exist on Parqet. Otherwise pre-tick every available one.
+        if self.source == SOURCE_RECONFIGURE:
+            current_ids: list[str] = self._get_reconfigure_entry().data.get(
+                CONF_PORTFOLIO_IDS, []
+            )
+            available_ids = {p["id"] for p in self._portfolios}
+            default_ids = [pid for pid in current_ids if pid in available_ids] or [
+                p["id"] for p in self._portfolios
+            ]
+        else:
+            default_ids = [p["id"] for p in self._portfolios]
 
         options = [
             SelectOptionDict(value=p["id"], label=p["name"])
             for p in self._portfolios
         ]
-        default_ids = [p["id"] for p in self._portfolios]
 
         return self.async_show_form(
             step_id="pick_portfolio",
@@ -235,6 +257,79 @@ class ParqetOAuth2FlowHandler(
                 CONF_PORTFOLIO_META: portfolio_meta,
             },
         )
+
+    def _update_account_entry(
+        self, entry: ConfigEntry, portfolios: list[dict[str, Any]]
+    ) -> ConfigFlowResult:
+        """Update an existing entry to track exactly the given portfolios.
+
+        Keeps `auth_implementation`, `token`, and `user_id` untouched — only
+        rewrites the portfolio selection. HA reloads the entry which triggers
+        device/entity cleanup for any portfolio dropped here.
+        """
+        portfolio_ids = [p["id"] for p in portfolios]
+        portfolio_meta = {
+            p["id"]: {
+                "name": p["name"],
+                "currency": p.get("currency", "EUR"),
+            }
+            for p in portfolios
+        }
+        return self.async_update_reload_and_abort(
+            entry,
+            data={
+                **entry.data,
+                CONF_PORTFOLIO_IDS: portfolio_ids,
+                CONF_PORTFOLIO_META: portfolio_meta,
+            },
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Let the user re-pick portfolios for an existing entry.
+
+        Reuses the stored OAuth token (no re-auth needed in the common case)
+        to fetch the live portfolio list, then routes into `pick_portfolio`
+        which dispatches to `_update_account_entry` on submit.
+        """
+        entry = self._get_reconfigure_entry()
+
+        try:
+            implementation = (
+                await config_entry_oauth2_flow.async_get_config_entry_implementation(
+                    self.hass, entry
+                )
+            )
+        except ValueError:
+            return self.async_abort(reason="oauth_error")
+
+        oauth_session = config_entry_oauth2_flow.OAuth2Session(
+            self.hass, entry, implementation
+        )
+        try:
+            await oauth_session.async_ensure_token_valid()
+        except Exception:
+            return self.async_abort(reason="reauth_required")
+
+        session = aiohttp_client.async_get_clientsession(self.hass)
+        api = ParqetApiClient(session, oauth_session=oauth_session)
+
+        try:
+            portfolios = await api.async_list_portfolios()
+        except ParqetAuthError:
+            return self.async_abort(reason="reauth_required")
+        except ParqetConnectionError:
+            return self.async_abort(reason="cannot_connect")
+        except ParqetApiError:
+            _LOGGER.exception("Failed to list portfolios during reconfigure")
+            return self.async_abort(reason="unknown")
+
+        if not portfolios:
+            return self.async_abort(reason="no_portfolios")
+
+        self._portfolios = portfolios
+        return await self.async_step_pick_portfolio(user_input)
 
     async def async_step_reauth(
         self, entry_data: Mapping[str, Any]

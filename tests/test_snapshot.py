@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -200,7 +200,7 @@ class TestWeekdayOnly:
         mgr._store = AsyncMock()
         mgr._data = {"snapshots": {}}
 
-        dt = datetime.fromisoformat(date_iso).replace(hour=22, tzinfo=timezone.utc)
+        dt = datetime.fromisoformat(date_iso).replace(hour=22, tzinfo=UTC)
         await mgr._on_time(dt)
 
         if should_call:

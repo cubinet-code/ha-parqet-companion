@@ -15,13 +15,17 @@ import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers import aiohttp_client, config_entry_oauth2_flow
 
-from .api import ParqetApiClient
+from .api import (
+    ParqetApiClient,
+    ParqetApiError,
+    ParqetAuthError,
+    ParqetConnectionError,
+)
 from .const import (
     CONF_INTERVAL,
-    CONF_PORTFOLIO_IDS,
     CONF_PORTFOLIO_META,
     CONF_SCAN_INTERVAL,
     CONF_SNAPSHOT_ENABLED,
@@ -38,6 +42,7 @@ from .coordinator import ParqetDataUpdateCoordinator
 from .frontend import async_register_frontend
 from .migration import async_migrate_entry as async_migrate_entry
 from .oauth import create_parqet_oauth_implementation
+from .portfolio_sync import async_reconcile_portfolios
 from .snapshot import SnapshotManager
 from .snapshot_ws import async_register_snapshot_ws
 from .websocket_api import async_register_websocket_api
@@ -107,7 +112,26 @@ async def async_setup_entry(
     session = aiohttp_client.async_get_clientsession(hass)
     api = ParqetApiClient(session, oauth_session=oauth_session)
 
-    portfolio_ids: list[str] = entry.data.get(CONF_PORTFOLIO_IDS, [])
+    # Reconcile entry-stored portfolios against the live Parqet account before
+    # spinning up coordinators. Deleted portfolios get pruned + a repair issue;
+    # without this step a deleted portfolio would 403-loop forever on first
+    # refresh and block the whole entry from loading.
+    try:
+        portfolio_ids = await async_reconcile_portfolios(hass, entry, api)
+    except ParqetAuthError as err:
+        raise ConfigEntryNotReady(f"Authentication failed: {err}") from err
+    except ParqetConnectionError as err:
+        raise ConfigEntryNotReady(f"Cannot reach Parqet: {err}") from err
+    except ParqetApiError as err:
+        raise ConfigEntryNotReady(f"Parqet API error: {err}") from err
+
+    if not portfolio_ids:
+        raise ConfigEntryError(
+            "All configured portfolios have been removed from your Parqet "
+            "account. Reconfigure this integration to pick new portfolios, or "
+            "delete it if you no longer use Parqet."
+        )
+
     portfolio_meta: dict[str, dict[str, str]] = entry.data.get(
         CONF_PORTFOLIO_META, {}
     )

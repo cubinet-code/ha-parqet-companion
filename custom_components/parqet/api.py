@@ -24,7 +24,16 @@ class ParqetApiError(Exception):
 
 
 class ParqetAuthError(ParqetApiError):
-    """Authentication or authorization error (401/403)."""
+    """Authentication failure (401). The token is invalid — reauth required."""
+
+
+class ParqetAccessDeniedError(ParqetApiError):
+    """Access denied (403). The token is valid but the resource is gone or not granted.
+
+    Typically raised when a portfolio has been deleted on Parqet's side or when
+    the OAuth installation no longer has permission for it. Reauth alone won't
+    fix this — the user needs to reconfigure which portfolios are tracked.
+    """
 
 
 class ParqetConnectionError(ParqetApiError):
@@ -194,8 +203,9 @@ def _handle_response(resp: aiohttp.ClientResponse, body: bytes) -> Any:
             f"Authentication failed ({resp.status})"
         )
     if resp.status == 403:
-        raise ParqetApiError(
-            f"Insufficient permissions ({resp.status})"
+        raise ParqetAccessDeniedError(
+            f"Access denied ({resp.status}) — portfolio may have been deleted or "
+            f"access revoked on Parqet"
         )
     if resp.status == 429:
         retry_after = 0

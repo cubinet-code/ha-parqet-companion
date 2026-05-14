@@ -25,10 +25,14 @@
     "abort": {
       "already_configured": "This Parqet account is already configured.",
       "cannot_connect": "Failed to connect to Parqet API.",
-      "no_portfolios": "No portfolios found in your Parqet account.",
+      "no_portfolios": "No portfolios found in your Parqet account. Create at least one portfolio at app.parqet.com, then try again.",
+      "reauth_required": "Your stored Parqet token is no longer valid. Use the reauth flow instead.",
       "reauth_successful": "Re-authentication was successful.",
+      "reconfigure_successful": "Portfolios updated.",
       "unknown": "Unexpected error.",
-      "oauth_error": "Error receiving access token."
+      "oauth_error": "Error receiving access token.",
+      "oauth_unauthorized": "Parqet refused the authentication. The authorization code may have been used already — try adding the integration again with a single browser tab.",
+      "oauth_failed": "Parqet refused the authentication. Try adding the integration again."
     }
   },
   "options": {
@@ -44,6 +48,12 @@
           "snapshot_weekdays_only": "Weekdays only (Mo-Fr) — skips weekends, Monday uses Friday's snapshot"
         }
       }
+    }
+  },
+  "issues": {
+    "portfolio_deleted": {
+      "title": "Portfolio \"{portfolio_name}\" removed from Parqet",
+      "description": "The portfolio \"{portfolio_name}\" tracked by \"{entry_title}\" is no longer on your Parqet account. It has been removed from this integration so refreshes stop failing. If this was unintended, restore the portfolio on Parqet, then reconfigure the integration to track it again."
     }
   },
   "entity": {

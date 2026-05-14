@@ -11,7 +11,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import ParqetApiClient, ParqetApiError, ParqetAuthError, ParqetConnectionError
+from .api import (
+    ParqetAccessDeniedError,
+    ParqetApiClient,
+    ParqetApiError,
+    ParqetAuthError,
+    ParqetConnectionError,
+)
 from .const import DEFAULT_INTERVAL, DEFAULT_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,6 +63,16 @@ class ParqetDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except ParqetAuthError as err:
             raise ConfigEntryAuthFailed(
                 f"Authentication failed for Parqet: {err}"
+            ) from err
+        except ParqetAccessDeniedError as err:
+            # 403 mid-flight: the portfolio was deleted on Parqet after setup
+            # already validated it. Surface a clear, actionable message instead
+            # of the generic "Insufficient permissions" wording — the next
+            # reload triggers portfolio_sync which will prune it cleanly.
+            raise UpdateFailed(
+                f"Portfolio {self.portfolio_id} is no longer accessible on "
+                f"Parqet (it may have been deleted). Reconfigure this "
+                f"integration to update the tracked portfolios."
             ) from err
         except ParqetConnectionError as err:
             raise UpdateFailed(

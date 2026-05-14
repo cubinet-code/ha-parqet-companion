@@ -246,12 +246,12 @@ async def init_integration(
         # register_view() calls succeed without starting real threads.
         hass.http = MagicMock()
 
-        from homeassistant.setup import async_setup_component
-
         # Patch manifest dependencies at the JSON level before HA loads it,
         # to avoid frontend/http (which need hass_frontend module).
         import json
         from pathlib import Path
+
+        from homeassistant.setup import async_setup_component
 
         manifest_path = Path("custom_components/parqet/manifest.json")
         original = manifest_path.read_text()
