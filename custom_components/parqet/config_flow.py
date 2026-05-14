@@ -11,6 +11,7 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
+import aiohttp
 import voluptuous as vol
 from homeassistant.config_entries import (
     SOURCE_REAUTH,
@@ -194,8 +195,6 @@ class ParqetOAuth2FlowHandler(
                 )
             return await self._create_account_entry(selected)
 
-        # In reconfigure mode, pre-tick portfolios that are currently tracked
-        # AND still exist on Parqet. Otherwise pre-tick every available one.
         if self.source == SOURCE_RECONFIGURE:
             current_ids: list[str] = self._get_reconfigure_entry().data.get(
                 CONF_PORTFOLIO_IDS, []
@@ -229,12 +228,12 @@ class ParqetOAuth2FlowHandler(
             ),
         )
 
-    async def _create_account_entry(
-        self, portfolios: list[dict[str, Any]]
-    ) -> ConfigFlowResult:
-        """Create the v2 account ConfigEntry covering the selected portfolios."""
-        portfolio_ids = [p["id"] for p in portfolios]
-        portfolio_meta = {
+    @staticmethod
+    def _portfolio_meta_from_api(
+        portfolios: list[dict[str, Any]],
+    ) -> dict[str, dict[str, str]]:
+        """Build the `portfolio_meta` shape from a Parqet `/portfolios` payload."""
+        return {
             p["id"]: {
                 "name": p["name"],
                 "currency": p.get("currency", "EUR"),
@@ -242,6 +241,10 @@ class ParqetOAuth2FlowHandler(
             for p in portfolios
         }
 
+    async def _create_account_entry(
+        self, portfolios: list[dict[str, Any]]
+    ) -> ConfigFlowResult:
+        """Create the v2 account ConfigEntry covering the selected portfolios."""
         title = (
             portfolios[0]["name"]
             if len(portfolios) == 1
@@ -253,8 +256,8 @@ class ParqetOAuth2FlowHandler(
             data={
                 **self._oauth_data,
                 CONF_USER_ID: self._user_id,
-                CONF_PORTFOLIO_IDS: portfolio_ids,
-                CONF_PORTFOLIO_META: portfolio_meta,
+                CONF_PORTFOLIO_IDS: [p["id"] for p in portfolios],
+                CONF_PORTFOLIO_META: self._portfolio_meta_from_api(portfolios),
             },
         )
 
@@ -267,20 +270,12 @@ class ParqetOAuth2FlowHandler(
         rewrites the portfolio selection. HA reloads the entry which triggers
         device/entity cleanup for any portfolio dropped here.
         """
-        portfolio_ids = [p["id"] for p in portfolios]
-        portfolio_meta = {
-            p["id"]: {
-                "name": p["name"],
-                "currency": p.get("currency", "EUR"),
-            }
-            for p in portfolios
-        }
         return self.async_update_reload_and_abort(
             entry,
             data={
                 **entry.data,
-                CONF_PORTFOLIO_IDS: portfolio_ids,
-                CONF_PORTFOLIO_META: portfolio_meta,
+                CONF_PORTFOLIO_IDS: [p["id"] for p in portfolios],
+                CONF_PORTFOLIO_META: self._portfolio_meta_from_api(portfolios),
             },
         )
 
@@ -309,7 +304,10 @@ class ParqetOAuth2FlowHandler(
         )
         try:
             await oauth_session.async_ensure_token_valid()
-        except Exception:
+        except aiohttp.ClientError:
+            # Network or 4xx at the token endpoint — fall back to reauth.
+            # Programmer/internal errors keep propagating so they surface
+            # instead of being swallowed as a misleading "reauth_required".
             return self.async_abort(reason="reauth_required")
 
         session = aiohttp_client.async_get_clientsession(self.hass)

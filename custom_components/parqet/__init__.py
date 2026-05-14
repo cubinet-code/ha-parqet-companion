@@ -112,10 +112,8 @@ async def async_setup_entry(
     session = aiohttp_client.async_get_clientsession(hass)
     api = ParqetApiClient(session, oauth_session=oauth_session)
 
-    # Reconcile entry-stored portfolios against the live Parqet account before
-    # spinning up coordinators. Deleted portfolios get pruned + a repair issue;
-    # without this step a deleted portfolio would 403-loop forever on first
-    # refresh and block the whole entry from loading.
+    # Must run before coordinator construction so we don't build coordinators
+    # for portfolios that are about to be pruned.
     try:
         portfolio_ids = await async_reconcile_portfolios(hass, entry, api)
     except ParqetAuthError as err:

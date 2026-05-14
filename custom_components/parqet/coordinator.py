@@ -65,10 +65,7 @@ class ParqetDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 f"Authentication failed for Parqet: {err}"
             ) from err
         except ParqetAccessDeniedError as err:
-            # 403 mid-flight: the portfolio was deleted on Parqet after setup
-            # already validated it. Surface a clear, actionable message instead
-            # of the generic "Insufficient permissions" wording — the next
-            # reload triggers portfolio_sync which will prune it cleanly.
+            # The next entry reload runs portfolio_sync which prunes this ID.
             raise UpdateFailed(
                 f"Portfolio {self.portfolio_id} is no longer accessible on "
                 f"Parqet (it may have been deleted). Reconfigure this "
