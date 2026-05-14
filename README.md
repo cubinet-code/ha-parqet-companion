@@ -380,6 +380,7 @@ logger:
 | Sensors show "unavailable" | Check that your Parqet OAuth token hasn't expired; re-authenticate in integration settings |
 | Card shows "No Parqet portfolios found" | Ensure the integration is set up with at least one portfolio |
 | Performance/Holdings/Activities show blank on first load | Update to v0.3.5+ — all card views now load data via WebSocket on render |
+| Repair issue "Portfolio X removed from Parqet" | The portfolio was deleted on Parqet's side and has been pruned from the entry. Use **Reconfigure** on the integration entry to pick a different set of portfolios. |
 
 ### Diagnostics
 
