@@ -31,6 +31,25 @@ def _make_response(status: int, body: bytes = b"{}") -> MagicMock:
     return resp
 
 
+def _token_endpoint_response_error(status: int) -> aiohttp.ClientResponseError:
+    """Build a real ClientResponseError as if it came from /oauth2/token.
+
+    Mirrors the shape HA's `OAuth2Session.async_ensure_token_valid()` produces
+    when Parqet rejects a refresh (including the newer
+    `OAuth2TokenRequestReauthError` subclass).
+    """
+    from yarl import URL
+
+    request_info = MagicMock()
+    request_info.url = URL("https://connect.parqet.com/oauth2/token")
+    return aiohttp.ClientResponseError(
+        request_info=request_info,
+        history=(),
+        status=status,
+        message=f"HTTP {status}",
+    )
+
+
 class TestParqetApiClient:
     """Test the Parqet API client."""
 
@@ -115,20 +134,19 @@ class TestParqetApiClient:
         with pytest.raises(ParqetConnectionError):
             await client.async_get_user()
 
-    async def test_client_error_at_token_endpoint_labels_token_refresh(
+    async def test_non_response_client_error_at_token_endpoint_is_connection_error(
         self, mock_session: AsyncMock
     ) -> None:
-        """A ClientError from /oauth2/token must say 'Token refresh failed',
-        not 'Connection error POST /performance' (Issue #6 side-fix).
+        """A non-response ClientError (e.g. socket disconnect mid-refresh) at
+        /oauth2/token stays transient: ParqetConnectionError with a label that
+        explains the failure happened before the resource call (Issue #6).
         """
-        from unittest.mock import MagicMock
-
         from yarl import URL
 
         request_info = MagicMock()
         request_info.url = URL("https://connect.parqet.com/oauth2/token")
         err = aiohttp.ClientError("invalid_grant")
-        err.request_info = request_info
+        err.request_info = request_info  # type: ignore[attr-defined]
         mock_session.request.side_effect = err
 
         client = ParqetApiClient(mock_session, "token")
@@ -138,6 +156,70 @@ class TestParqetApiClient:
 
         assert "Token refresh failed" in str(exc_info.value)
         assert "/performance" in str(exc_info.value)  # destination still mentioned
+
+    @pytest.mark.parametrize("status", [400, 401, 403])
+    async def test_4xx_response_at_token_endpoint_is_auth_error(
+        self, mock_session: AsyncMock, status: int
+    ) -> None:
+        """4xx (excl. 429) from /oauth2/token must raise ParqetAuthError so
+        the coordinator can drive HA into the reauth flow. Today Parqet
+        rejects expired refresh tokens with 400 — this is the path that
+        ensures the user sees a reauth banner instead of looping errors.
+        """
+        mock_session.request.side_effect = _token_endpoint_response_error(status)
+
+        client = ParqetApiClient(mock_session, "token")
+
+        with pytest.raises(ParqetAuthError, match=f"{status}"):
+            await client.async_get_performance(["p1"])
+
+    async def test_429_response_at_token_endpoint_is_connection_error(
+        self, mock_session: AsyncMock
+    ) -> None:
+        """429 on /oauth2/token is transient — the user can't fix a rate
+        limit by re-authenticating, so it must NOT route to reauth.
+        """
+        mock_session.request.side_effect = _token_endpoint_response_error(429)
+
+        client = ParqetApiClient(mock_session, "token")
+
+        with pytest.raises(ParqetConnectionError):
+            await client.async_get_performance(["p1"])
+
+    async def test_5xx_response_at_token_endpoint_is_connection_error(
+        self, mock_session: AsyncMock
+    ) -> None:
+        """5xx on /oauth2/token is transient — coordinator backoff handles it."""
+        mock_session.request.side_effect = _token_endpoint_response_error(503)
+
+        client = ParqetApiClient(mock_session, "token")
+
+        with pytest.raises(ParqetConnectionError):
+            await client.async_get_performance(["p1"])
+
+    async def test_4xx_response_at_resource_endpoint_is_not_misrouted(
+        self, mock_session: AsyncMock
+    ) -> None:
+        """A 4xx ClientResponseError from a resource endpoint must NOT be
+        treated as a token-refresh-reauth condition — the URL check is the
+        invariant that prevents misrouting. Guards against future refactors.
+        """
+        from yarl import URL
+
+        request_info = MagicMock()
+        request_info.url = URL("https://connect.parqet.com/portfolios/abc/activities")
+        err = aiohttp.ClientResponseError(
+            request_info=request_info,
+            history=(),
+            status=400,
+            message="Bad Request",
+        )
+        mock_session.request.side_effect = err
+
+        client = ParqetApiClient(mock_session, "token")
+
+        with pytest.raises(ParqetConnectionError):
+            await client.async_get_activities("abc")
 
     async def test_api_error_on_400(self, mock_session: AsyncMock) -> None:
         """Test that 400 raises ParqetApiError."""

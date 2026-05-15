@@ -15,7 +15,11 @@ import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryError,
+    ConfigEntryNotReady,
+)
 from homeassistant.helpers import aiohttp_client, config_entry_oauth2_flow
 
 from .api import (
@@ -23,6 +27,7 @@ from .api import (
     ParqetApiError,
     ParqetAuthError,
     ParqetConnectionError,
+    _is_token_endpoint_reauth_error,
 )
 from .const import (
     CONF_INTERVAL,
@@ -107,6 +112,16 @@ async def async_setup_entry(
     try:
         await oauth_session.async_ensure_token_valid()
     except aiohttp.ClientError as err:
+        if _is_token_endpoint_reauth_error(err):
+            _LOGGER.info(
+                "Parqet rejected token refresh during setup (status=%s); "
+                "reauth required",
+                err.status,  # type: ignore[attr-defined]
+            )
+            raise ConfigEntryAuthFailed(
+                f"Token refresh rejected by Parqet "
+                f"({err.status}); reauth required"  # type: ignore[attr-defined]
+            ) from err
         raise ConfigEntryNotReady(f"Failed to refresh token: {err}") from err
 
     session = aiohttp_client.async_get_clientsession(hass)

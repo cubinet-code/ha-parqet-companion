@@ -34,6 +34,7 @@ from .api import (
     ParqetApiError,
     ParqetAuthError,
     ParqetConnectionError,
+    _is_token_endpoint_reauth_error,
 )
 from .const import (
     CONF_INTERVAL,
@@ -304,11 +305,14 @@ class ParqetOAuth2FlowHandler(
         )
         try:
             await oauth_session.async_ensure_token_valid()
-        except aiohttp.ClientError:
-            # Network or 4xx at the token endpoint — fall back to reauth.
-            # Programmer/internal errors keep propagating so they surface
-            # instead of being swallowed as a misleading "reauth_required".
-            return self.async_abort(reason="reauth_required")
+        except aiohttp.ClientError as err:
+            # 4xx at the token endpoint = stored credentials are dead, only
+            # reauth recovers. 5xx/network/429 are transient — sending the
+            # user into a reauth flow they can't complete (because Parqet is
+            # down) is confusing, so route them to `cannot_connect` instead.
+            if _is_token_endpoint_reauth_error(err):
+                return self.async_abort(reason="reauth_required")
+            return self.async_abort(reason="cannot_connect")
 
         session = aiohttp_client.async_get_clientsession(self.hass)
         api = ParqetApiClient(session, oauth_session=oauth_session)

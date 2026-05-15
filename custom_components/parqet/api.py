@@ -115,9 +115,20 @@ class ParqetApiClient:
             # `aiohttp.ClientError` may originate from the OAuth token endpoint
             # via `OAuth2Session.async_ensure_token_valid()` rather than the
             # resource call this method is making. When it does, the failing
-            # URL is /oauth2/token, NOT `path`. Surface that explicitly so
-            # users see "Token refresh failed" instead of a misleading
-            # "Connection error POST /performance: …" (Issue #6).
+            # URL is /oauth2/token, NOT `path`. Distinguish two failure modes:
+            # a 4xx response from the token endpoint means Parqet has rejected
+            # the stored credentials — reauth is the only recovery, so surface
+            # it as ParqetAuthError. Everything else (5xx, 429, socket errors)
+            # stays transient.
+            if _is_token_endpoint_reauth_error(err):
+                _LOGGER.info(
+                    "Parqet rejected token refresh (status=%s); reauth required",
+                    err.status,  # type: ignore[attr-defined]
+                )
+                raise ParqetAuthError(
+                    f"Token refresh rejected by Parqet "
+                    f"({err.status}); reauth required"  # type: ignore[attr-defined]
+                ) from err
             failing_url = _failing_url(err)
             if failing_url and failing_url.endswith("/oauth2/token"):
                 raise ParqetConnectionError(
@@ -194,6 +205,26 @@ def _failing_url(err: aiohttp.ClientError) -> str | None:
     url = getattr(request_info, "url", None)
     path = getattr(url, "path", None)
     return path if isinstance(path, str) else None
+
+
+def _is_token_endpoint_reauth_error(err: aiohttp.ClientError) -> bool:
+    """True iff `err` is a 4xx (excluding 429) from /oauth2/token.
+
+    4xx at the token endpoint means the stored credentials are no longer
+    accepted — only reauth fixes it. 429 is excluded because rate-limiting
+    a refresh is not user-actionable; the coordinator's backoff handles it.
+    5xx and non-response ClientErrors stay transient.
+
+    Newer HA wraps this case in `OAuth2TokenRequestReauthError`, a subclass
+    of `aiohttp.ClientResponseError` — the structural check catches both
+    that and the raw `ClientResponseError` raised by older HA versions.
+    """
+    if not isinstance(err, aiohttp.ClientResponseError):
+        return False
+    if err.status == 429 or not 400 <= err.status < 500:
+        return False
+    failing_url = _failing_url(err)
+    return bool(failing_url and failing_url.endswith("/oauth2/token"))
 
 
 def _handle_response(resp: aiohttp.ClientResponse, body: bytes) -> Any:

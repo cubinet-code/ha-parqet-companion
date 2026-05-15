@@ -216,3 +216,77 @@ async def test_reconfigure_aborts_when_account_has_no_portfolios(
     )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "no_portfolios"
+
+
+# ─── Reconfigure token-refresh failure routing ─────────────────────────────────
+
+
+async def _start_reconfigure_with_refresh_error(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    err: Exception,
+) -> dict:
+    """Drive `async_step_reconfigure` where the token refresh raises `err`."""
+    oauth_session = AsyncMock(token={"access_token": "stale"})
+    oauth_session.async_ensure_token_valid = AsyncMock(side_effect=err)
+
+    with (
+        patch(
+            "custom_components.parqet.config_flow.config_entry_oauth2_flow"
+            ".async_get_config_entry_implementation",
+            return_value=AsyncMock(),
+        ),
+        patch(
+            "custom_components.parqet.config_flow.config_entry_oauth2_flow.OAuth2Session",
+            return_value=oauth_session,
+        ),
+        patch(
+            "custom_components.parqet.config_flow.aiohttp_client.async_get_clientsession",
+        ),
+    ):
+        return await entry.start_reconfigure_flow(hass)
+
+
+def _token_endpoint_response_error(status: int):
+    """Build a real ClientResponseError as if it came from /oauth2/token."""
+    import aiohttp
+    from unittest.mock import MagicMock
+
+    from yarl import URL
+
+    request_info = MagicMock()
+    request_info.url = URL("https://connect.parqet.com/oauth2/token")
+    return aiohttp.ClientResponseError(
+        request_info=request_info,
+        history=(),
+        status=status,
+        message=f"HTTP {status}",
+    )
+
+
+async def test_reconfigure_4xx_token_aborts_reauth_required(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Stored credentials rejected by Parqet → tell the user to reauth."""
+    result = await _start_reconfigure_with_refresh_error(
+        hass, mock_config_entry, _token_endpoint_response_error(400)
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reauth_required"
+
+
+async def test_reconfigure_5xx_token_aborts_cannot_connect(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Parqet token endpoint had a transient error → cannot_connect, not reauth.
+
+    Sending the user to a reauth flow they can't complete (Parqet is down) is
+    worse than telling them to try again later.
+    """
+    result = await _start_reconfigure_with_refresh_error(
+        hass, mock_config_entry, _token_endpoint_response_error(503)
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "cannot_connect"
