@@ -5,11 +5,30 @@ from __future__ import annotations
 from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from yarl import URL
 
 from custom_components.parqet.const import DOMAIN
+
+
+def token_endpoint_response_error(status: int) -> aiohttp.ClientResponseError:
+    """Build a real ClientResponseError as if it came from /oauth2/token.
+
+    Mirrors the shape HA's `OAuth2Session.async_ensure_token_valid()` produces
+    when Parqet rejects a refresh (including the newer
+    `OAuth2TokenRequestReauthError` subclass).
+    """
+    request_info = MagicMock()
+    request_info.url = URL("https://connect.parqet.com/oauth2/token")
+    return aiohttp.ClientResponseError(
+        request_info=request_info,
+        history=(),
+        status=status,
+        message=f"HTTP {status}",
+    )
 
 MOCK_PORTFOLIO_ID = "test_portfolio_123"
 MOCK_PORTFOLIO_NAME = "Test Portfolio"

@@ -16,6 +16,8 @@ from custom_components.parqet.api import (
     ParqetConnectionError,
 )
 
+from .conftest import token_endpoint_response_error
+
 
 @pytest.fixture
 def mock_session() -> AsyncMock:
@@ -29,25 +31,6 @@ def _make_response(status: int, body: bytes = b"{}") -> MagicMock:
     resp.status = status
     resp.read = AsyncMock(return_value=body)
     return resp
-
-
-def _token_endpoint_response_error(status: int) -> aiohttp.ClientResponseError:
-    """Build a real ClientResponseError as if it came from /oauth2/token.
-
-    Mirrors the shape HA's `OAuth2Session.async_ensure_token_valid()` produces
-    when Parqet rejects a refresh (including the newer
-    `OAuth2TokenRequestReauthError` subclass).
-    """
-    from yarl import URL
-
-    request_info = MagicMock()
-    request_info.url = URL("https://connect.parqet.com/oauth2/token")
-    return aiohttp.ClientResponseError(
-        request_info=request_info,
-        history=(),
-        status=status,
-        message=f"HTTP {status}",
-    )
 
 
 class TestParqetApiClient:
@@ -155,7 +138,7 @@ class TestParqetApiClient:
             await client.async_get_performance(["p1"])
 
         assert "Token refresh failed" in str(exc_info.value)
-        assert "/performance" in str(exc_info.value)  # destination still mentioned
+        assert "/performance" in str(exc_info.value)
 
     @pytest.mark.parametrize("status", [400, 401, 403])
     async def test_4xx_response_at_token_endpoint_is_auth_error(
@@ -166,7 +149,7 @@ class TestParqetApiClient:
         rejects expired refresh tokens with 400 — this is the path that
         ensures the user sees a reauth banner instead of looping errors.
         """
-        mock_session.request.side_effect = _token_endpoint_response_error(status)
+        mock_session.request.side_effect = token_endpoint_response_error(status)
 
         client = ParqetApiClient(mock_session, "token")
 
@@ -179,7 +162,7 @@ class TestParqetApiClient:
         """429 on /oauth2/token is transient — the user can't fix a rate
         limit by re-authenticating, so it must NOT route to reauth.
         """
-        mock_session.request.side_effect = _token_endpoint_response_error(429)
+        mock_session.request.side_effect = token_endpoint_response_error(429)
 
         client = ParqetApiClient(mock_session, "token")
 
@@ -190,7 +173,7 @@ class TestParqetApiClient:
         self, mock_session: AsyncMock
     ) -> None:
         """5xx on /oauth2/token is transient — coordinator backoff handles it."""
-        mock_session.request.side_effect = _token_endpoint_response_error(503)
+        mock_session.request.side_effect = token_endpoint_response_error(503)
 
         client = ParqetApiClient(mock_session, "token")
 

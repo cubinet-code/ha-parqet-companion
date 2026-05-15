@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 import aiohttp
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -120,14 +120,14 @@ class ParqetApiClient:
             # the stored credentials — reauth is the only recovery, so surface
             # it as ParqetAuthError. Everything else (5xx, 429, socket errors)
             # stays transient.
-            if _is_token_endpoint_reauth_error(err):
+            if is_token_endpoint_reauth_error(err):
                 _LOGGER.info(
                     "Parqet rejected token refresh (status=%s); reauth required",
-                    err.status,  # type: ignore[attr-defined]
+                    err.status,
                 )
                 raise ParqetAuthError(
                     f"Token refresh rejected by Parqet "
-                    f"({err.status}); reauth required"  # type: ignore[attr-defined]
+                    f"({err.status}); reauth required"
                 ) from err
             failing_url = _failing_url(err)
             if failing_url and failing_url.endswith("/oauth2/token"):
@@ -207,7 +207,9 @@ def _failing_url(err: aiohttp.ClientError) -> str | None:
     return path if isinstance(path, str) else None
 
 
-def _is_token_endpoint_reauth_error(err: aiohttp.ClientError) -> bool:
+def is_token_endpoint_reauth_error(
+    err: aiohttp.ClientError,
+) -> TypeGuard[aiohttp.ClientResponseError]:
     """True iff `err` is a 4xx (excluding 429) from /oauth2/token.
 
     4xx at the token endpoint means the stored credentials are no longer
@@ -218,6 +220,8 @@ def _is_token_endpoint_reauth_error(err: aiohttp.ClientError) -> bool:
     Newer HA wraps this case in `OAuth2TokenRequestReauthError`, a subclass
     of `aiohttp.ClientResponseError` — the structural check catches both
     that and the raw `ClientResponseError` raised by older HA versions.
+
+    Returns a `TypeGuard` so callers can read `err.status` without casts.
     """
     if not isinstance(err, aiohttp.ClientResponseError):
         return False

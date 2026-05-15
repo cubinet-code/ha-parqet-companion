@@ -22,7 +22,11 @@ from custom_components.parqet.const import (
 from custom_components.parqet.coordinator import ParqetDataUpdateCoordinator
 from custom_components.parqet.portfolio_sync import _missing_issue_id
 
-from .conftest import MOCK_PORTFOLIO_ID, MOCK_USER_ID
+from .conftest import (
+    MOCK_PORTFOLIO_ID,
+    MOCK_USER_ID,
+    token_endpoint_response_error,
+)
 
 
 async def test_setup_entry_creates_account_runtime(
@@ -226,23 +230,8 @@ async def test_setup_is_noop_when_portfolios_unchanged(
 # ─── Setup-time token-refresh failure routing ──────────────────────────────────
 
 
-def _token_endpoint_response_error(status: int) -> aiohttp.ClientResponseError:
-    """Build a real ClientResponseError as if it came from /oauth2/token."""
-    from yarl import URL
-
-    request_info = MagicMock()
-    request_info.url = URL("https://connect.parqet.com/oauth2/token")
-    return aiohttp.ClientResponseError(
-        request_info=request_info,
-        history=(),
-        status=status,
-        message=f"HTTP {status}",
-    )
-
-
 async def _setup_entry_with_token_refresh_error(
     hass: HomeAssistant,
-    entry: MockConfigEntry,
     err: aiohttp.ClientError,
 ) -> None:
     """Run async_setup_entry where the OAuth refresh raises `err`."""
@@ -281,30 +270,9 @@ async def _setup_entry_with_token_refresh_error(
         manifest_path.write_text(manifest_original)
 
 
-def _make_v2_entry(hass: HomeAssistant) -> MockConfigEntry:
-    """Build a minimal v2 entry suitable for testing setup-time refresh errors."""
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="Refresh Test",
-        data={
-            "auth_implementation": "parqet",
-            "token": {"access_token": "stale", "expires_at": 0},
-            "user_id": MOCK_USER_ID,
-            CONF_PORTFOLIO_IDS: [MOCK_PORTFOLIO_ID],
-            CONF_PORTFOLIO_META: {
-                MOCK_PORTFOLIO_ID: {"name": "Alive", "currency": "EUR"}
-            },
-        },
-        unique_id=MOCK_USER_ID,
-        version=2,
-        minor_version=1,
-    )
-    entry.add_to_hass(hass)
-    return entry
-
-
 async def test_setup_4xx_at_token_endpoint_raises_auth_failed(
     hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
 ) -> None:
     """400 from /oauth2/token at setup → ConfigEntryAuthFailed → reauth UX.
 
@@ -312,47 +280,42 @@ async def test_setup_4xx_at_token_endpoint_raises_auth_failed(
     symptom. Without this routing, HA would treat it as transient and retry
     every 15 minutes with no banner.
     """
-    entry = _make_v2_entry(hass)
-
     await _setup_entry_with_token_refresh_error(
-        hass, entry, _token_endpoint_response_error(400)
+        hass, token_endpoint_response_error(400)
     )
 
-    refreshed = hass.config_entries.async_get_entry(entry.entry_id)
+    refreshed = hass.config_entries.async_get_entry(mock_config_entry.entry_id)
     assert refreshed.state is ConfigEntryState.SETUP_ERROR
-    # A reauth flow should be in progress on this entry.
     reauth_flows = [
         flow
         for flow in hass.config_entries.flow.async_progress_by_handler(DOMAIN)
         if flow["context"].get("source") == "reauth"
-        and flow["context"].get("entry_id") == entry.entry_id
+        and flow["context"].get("entry_id") == mock_config_entry.entry_id
     ]
     assert reauth_flows, "ConfigEntryAuthFailed should start a reauth flow"
 
 
 async def test_setup_5xx_at_token_endpoint_raises_not_ready(
     hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
 ) -> None:
     """5xx at /oauth2/token is transient — entry must stay in retry, not reauth."""
-    entry = _make_v2_entry(hass)
-
     await _setup_entry_with_token_refresh_error(
-        hass, entry, _token_endpoint_response_error(503)
+        hass, token_endpoint_response_error(503)
     )
 
-    refreshed = hass.config_entries.async_get_entry(entry.entry_id)
+    refreshed = hass.config_entries.async_get_entry(mock_config_entry.entry_id)
     assert refreshed.state is ConfigEntryState.SETUP_RETRY
 
 
 async def test_setup_generic_client_error_raises_not_ready(
     hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
 ) -> None:
     """Non-response ClientError (e.g. socket disconnect) stays transient."""
-    entry = _make_v2_entry(hass)
-
     await _setup_entry_with_token_refresh_error(
-        hass, entry, aiohttp.ClientError("connection refused")
+        hass, aiohttp.ClientError("connection refused")
     )
 
-    refreshed = hass.config_entries.async_get_entry(entry.entry_id)
+    refreshed = hass.config_entries.async_get_entry(mock_config_entry.entry_id)
     assert refreshed.state is ConfigEntryState.SETUP_RETRY

@@ -34,7 +34,7 @@ from .api import (
     ParqetApiError,
     ParqetAuthError,
     ParqetConnectionError,
-    _is_token_endpoint_reauth_error,
+    is_token_endpoint_reauth_error,
 )
 from .const import (
     CONF_INTERVAL,
@@ -310,7 +310,7 @@ class ParqetOAuth2FlowHandler(
             # reauth recovers. 5xx/network/429 are transient — sending the
             # user into a reauth flow they can't complete (because Parqet is
             # down) is confusing, so route them to `cannot_connect` instead.
-            if _is_token_endpoint_reauth_error(err):
+            if is_token_endpoint_reauth_error(err):
                 return self.async_abort(reason="reauth_required")
             return self.async_abort(reason="cannot_connect")
 
