@@ -78,6 +78,22 @@ Or manually:
 4. Select which portfolios to track (all are selected by default)
 5. The Parqet account is added as a single integration entry. Each selected portfolio becomes its own device with sensors and a calendar entity.
 
+### Upgrading from v0.3.x
+
+v0.4 changes the integration's internal layout to **one ConfigEntry per Parqet account**, with each portfolio appearing as a device under that entry. Previously every portfolio was its own ConfigEntry, which caused a token-refresh race when multiple portfolios shared a single Parqet account (see [#6](https://github.com/cubinet-code/ha-parqet-companion/issues/6)).
+
+**Migration is automatic.** When you upgrade and restart Home Assistant the v1 entries are folded into one v2 entry per account.
+
+| What you'll notice | Why |
+|---|---|
+| **N integration entries collapse into 1 per Parqet account** | Settings → Devices & Services will show one "Parqet Companion" entry with all your portfolios as devices underneath, instead of one entry per portfolio. |
+| **Dashboards, automations, sensor history all keep working** | Entity unique IDs (`{portfolio_id}_{sensor}`) and device identifiers are preserved across migration — nothing needs to be rewired. |
+| **Daily snapshot history is preserved** | The snapshot store is renamed from per-entry to per-portfolio keys as part of the migration; your 7-day rolling history survives. |
+| **No re-authentication in most cases** | The freshest valid OAuth token across your old entries is kept. If no sibling token is still valid, a reauth flow starts automatically and you'll see a "Reconfigure required" banner. |
+| **New: "Reconfigure" action on the integration entry** | Lets you change which portfolios you track without removing/re-adding the integration. Also used to recover from portfolios deleted on Parqet's side. |
+
+If you previously installed **v0.4.0-beta.2 or v0.4.0-beta.3** before 2026-05-15, those release artifacts were broken (they contained v0.3.10 source code due to a release-pipeline bug). Redownload v0.4.0-beta.4 or later from HACS and restart HA to recover.
+
 ### Options
 
 After setup, click the gear icon on any portfolio entry to configure:
@@ -381,6 +397,8 @@ logger:
 | Card shows "No Parqet portfolios found" | Ensure the integration is set up with at least one portfolio |
 | Performance/Holdings/Activities show blank on first load | Update to v0.3.5+ — all card views now load data via WebSocket on render |
 | Repair issue "Portfolio X removed from Parqet" | The portfolio was deleted on Parqet's side and has been pruned from the entry. Use **Reconfigure** on the integration entry to pick a different set of portfolios. |
+| Log: `Migration handler not found for entry … for parqet` | The integration code on disk is older than your stored ConfigEntry schema (typically after a downgrade). Re-install the latest release via HACS and restart HA. |
+| "Reconfigure required for Parqet" banner appears repeatedly | Parqet rejected the stored refresh token (HTTP 4xx on `/oauth2/token`). Click the banner, complete the OAuth flow again, and the integration will resume normally. |
 
 ### Diagnostics
 
