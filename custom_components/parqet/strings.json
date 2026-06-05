@@ -84,5 +84,11 @@
       "positive_allocation": { "name": "Positive allocation" },
       "negative_allocation": { "name": "Negative allocation" }
     }
+  },
+  "services": {
+    "dump_diagnostics": {
+      "name": "Dump diagnostics",
+      "description": "Write a Parqet diagnostics snapshot (frontend registration, Lovelace resources, coordinator state) to a persistent notification. Useful for debugging card loading issues."
+    }
   }
 }

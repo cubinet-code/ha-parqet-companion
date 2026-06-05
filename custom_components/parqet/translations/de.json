@@ -84,5 +84,11 @@
       "positive_allocation": { "name": "Positive Allokation" },
       "negative_allocation": { "name": "Negative Allokation" }
     }
+  },
+  "services": {
+    "dump_diagnostics": {
+      "name": "Diagnose erstellen",
+      "description": "Schreibt eine Parqet-Diagnose (Frontend-Registrierung, Lovelace-Ressourcen, Coordinator-Status) als persistente Benachrichtigung. Hilfreich beim Debuggen von Karten-Ladeproblemen."
+    }
   }
 }

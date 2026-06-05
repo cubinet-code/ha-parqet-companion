@@ -404,6 +404,8 @@ logger:
 
 Download diagnostic data from the device page (**Download diagnostics**). All OAuth tokens are automatically redacted.
 
+For card-loading issues ("custom element doesn't exist: parqet-companion-card", "Configuration error"), call the **Parqet: Dump diagnostics** service from **Developer Tools → Services**. It posts a snapshot of the frontend registration, Lovelace resources, and coordinator state as a persistent notification you can screenshot for support.
+
 ## Contributing
 
 Contributions are welcome! This integration aims to become an official HA core integration.

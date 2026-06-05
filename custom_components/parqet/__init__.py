@@ -48,6 +48,7 @@ from .frontend import async_register_frontend
 from .migration import async_migrate_entry as async_migrate_entry
 from .oauth import create_parqet_oauth_implementation
 from .portfolio_sync import async_reconcile_portfolios
+from .services import async_register_services
 from .snapshot import SnapshotManager
 from .snapshot_ws import async_register_snapshot_ws
 from .websocket_api import async_register_websocket_api
@@ -88,6 +89,9 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     # Register WebSocket API commands (once, not per entry).
     async_register_websocket_api(hass)
     async_register_snapshot_ws(hass)
+
+    # Register HA services (parqet.dump_diagnostics for user-driven debugging).
+    async_register_services(hass)
 
     return True
 
