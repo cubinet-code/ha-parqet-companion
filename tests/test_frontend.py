@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,6 +10,7 @@ from homeassistant.core import HomeAssistant
 
 from custom_components.parqet.frontend import (
     CARD_JS_URL,
+    ParqetCardJsView,
     _async_register_lovelace_resource,
     async_register_frontend,
 )
@@ -135,7 +137,7 @@ class TestAsyncRegisterFrontend:
         hass = MagicMock(spec=HomeAssistant)
         hass.async_add_executor_job = AsyncMock(return_value="0.3.3")
         hass.http = MagicMock()
-        hass.http.async_register_static_paths = AsyncMock()
+        hass.http.register_view = MagicMock()
         hass.is_running = True
 
         def capture_create_task(coro, **kwargs):
@@ -165,3 +167,47 @@ class TestAsyncRegisterFrontend:
             "Expected async_create_task to be called once — "
             "the callback must schedule the coroutine, not return it unawaited"
         )
+
+    @pytest.mark.asyncio
+    async def test_registers_custom_view_for_card_js(self) -> None:
+        """The card JS must be served via ParqetCardJsView (not raw static path).
+
+        Regression guard: the static-path handler with cache_headers=False sets
+        no Cache-Control header, leaving the service worker free to poison-cache
+        bad responses. The view ensures we always emit `no-cache, must-revalidate`.
+        """
+        hass = MagicMock(spec=HomeAssistant)
+        hass.async_add_executor_job = AsyncMock(return_value="0.3.3")
+        hass.http = MagicMock()
+        hass.http.register_view = MagicMock()
+        hass.is_running = True
+
+        with (
+            patch("custom_components.parqet.frontend.CARD_JS_PATH") as mock_path,
+            patch("custom_components.parqet.frontend.add_extra_js_url"),
+            patch("custom_components.parqet.frontend.async_at_started"),
+        ):
+            mock_path.exists.return_value = True
+            await async_register_frontend(hass)
+
+        hass.http.register_view.assert_called_once()
+        view = hass.http.register_view.call_args.args[0]
+        assert isinstance(view, ParqetCardJsView)
+        assert view.url == CARD_JS_URL
+        assert view.requires_auth is False
+
+
+class TestParqetCardJsView:
+    """The HTTP view that serves the card bundle."""
+
+    @pytest.mark.asyncio
+    async def test_response_sets_no_cache_and_js_content_type(self, tmp_path: Path) -> None:
+        """The view must emit Cache-Control: no-cache, must-revalidate."""
+        js = tmp_path / "parqet-card.js"
+        js.write_text("/* test bundle */")
+        view = ParqetCardJsView(js)
+
+        response = await view.get(MagicMock())
+
+        assert response.headers["Cache-Control"] == "no-cache, must-revalidate"
+        assert response.headers["Content-Type"].startswith("application/javascript")

@@ -6,8 +6,9 @@ import json
 import logging
 from pathlib import Path
 
+from aiohttp import web
 from homeassistant.components.frontend import add_extra_js_url
-from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.start import async_at_started
 
@@ -25,6 +26,40 @@ def _read_manifest_version() -> str:
         return json.loads(_MANIFEST.read_text()).get("version", "0")
     except Exception:
         return "0"
+
+
+class ParqetCardJsView(HomeAssistantView):
+    """Serve parqet-card.js with `Cache-Control: no-cache, must-revalidate`.
+
+    The default static-path handler (`cache_headers=False`) sets no
+    Cache-Control header at all, so HA's frontend service worker is free to
+    cache responses under heuristic policies. A transient bad/partial response
+    could then poison the cache for the life of the URL — and our URL only
+    changes on version bump, so users would see "custom element doesn't exist:
+    parqet-companion-card" until they upgrade HA. `no-cache` lets the browser
+    and service worker keep a cached copy but forces them to revalidate it on
+    every use. aiohttp's `FileResponse` already emits a strong ETag from
+    (mtime_ns, size) and handles `If-None-Match` → 304, so the body is only
+    transferred when the bundle actually changes. This gives us:
+      - poisoning is self-healing on the next request (always revalidates),
+      - same-version reloads pay only a tiny 304 round-trip (no body).
+    """
+
+    url = "/parqet/parqet-card.js"
+    name = "parqet:card-js"
+    requires_auth = False
+
+    def __init__(self, js_path: Path) -> None:
+        self._js_path = js_path
+
+    async def get(self, request: web.Request) -> web.FileResponse:
+        return web.FileResponse(
+            str(self._js_path),
+            headers={
+                "Cache-Control": "no-cache, must-revalidate",
+                "Content-Type": "application/javascript; charset=utf-8",
+            },
+        )
 
 
 async def _async_register_lovelace_resource(hass: HomeAssistant, url: str) -> None:
@@ -105,10 +140,10 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     version = await hass.async_add_executor_job(_read_manifest_version)
     versioned_url = f"{CARD_JS_URL}?v={version}"
 
-    # Serve the JS file at /parqet/parqet-card.js (clean path, no query params).
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(CARD_JS_URL, str(CARD_JS_PATH), cache_headers=False)]
-    )
+    # Serve the JS at /parqet/parqet-card.js with Cache-Control: no-store, so
+    # the browser/service worker can never cache a poisoned response. See the
+    # ParqetCardJsView docstring for the failure mode this guards against.
+    hass.http.register_view(ParqetCardJsView(CARD_JS_PATH))
 
     # Fallback: inject script tag on every HA page (covers YAML mode).
     add_extra_js_url(hass, versioned_url)
@@ -128,7 +163,7 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     async_at_started(hass, _schedule_lovelace_registration)
 
     _LOGGER.debug(
-        "Registered Parqet card frontend: static_path=%s, "
-        "versioned_url=%s, cache_headers=False, js_exists=%s",
+        "Registered Parqet card frontend: view=%s, versioned_url=%s, "
+        "cache_control=no-cache, js_exists=%s",
         CARD_JS_URL, versioned_url, CARD_JS_PATH.exists(),
     )
