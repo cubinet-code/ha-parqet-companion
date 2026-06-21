@@ -336,6 +336,13 @@ def _aggregate_value(
     return sum(values)
 
 
+def _has_multiple_account_sources(
+    coordinators_by_entry: dict[str, list[ParqetDataUpdateCoordinator]],
+) -> bool:
+    """Return whether aggregate sensors should be exposed."""
+    return len(coordinators_by_entry) >= 2
+
+
 def _combined_top_holdings(datasets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return the top 5 active holdings by current value across all payloads."""
     holdings = [holding for data in datasets for holding in _active_holdings(data)]
@@ -400,6 +407,12 @@ async def async_setup_entry(
     aggregate_sensors: list[ParqetAggregateSensor] | None = integration_data.get(
         AGGREGATE_SENSOR_KEY
     )
+    if not _has_multiple_account_sources(aggregate_coordinators):
+        if aggregate_sensors is not None:
+            for sensor in aggregate_sensors:
+                sensor.refresh_coordinators()
+        return
+
     if aggregate_sensors is None:
         aggregate_sensors = [
             ParqetAggregateSensor(hass, description)
@@ -483,6 +496,9 @@ class ParqetAggregateSensor(SensorEntity):
 
         integration_data = self.hass.data.get(DOMAIN, {})
         coordinators_by_entry = integration_data.get(AGGREGATE_COORDINATORS_KEY, {})
+        if not _has_multiple_account_sources(coordinators_by_entry):
+            return []
+
         return [
             coordinator
             for coordinators in coordinators_by_entry.values()

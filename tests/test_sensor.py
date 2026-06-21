@@ -6,6 +6,7 @@ from custom_components.parqet.sensor import (
     AGGREGATE_SENSORS,
     _aggregate_value,
     _combined_top_holdings,
+    _has_multiple_account_sources,
     _resolve_path,
 )
 
@@ -127,3 +128,9 @@ class TestAggregateSensors:
         top = _combined_top_holdings([MOCK_PERFORMANCE, MOCK_PERFORMANCE])
         assert top[0] == {"name": "Test Stock", "value": 5500.0, "weight": 25.0}
         assert len(top) == 4
+
+    def test_aggregate_sensors_require_multiple_accounts(self) -> None:
+        """Test aggregate entities are exposed only for multiple account entries."""
+        assert not _has_multiple_account_sources({})
+        assert not _has_multiple_account_sources({"entry_1": []})
+        assert _has_multiple_account_sources({"entry_1": [], "entry_2": []})
