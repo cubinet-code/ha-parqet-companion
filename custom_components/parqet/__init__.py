@@ -21,6 +21,7 @@ from homeassistant.exceptions import (
     ConfigEntryNotReady,
 )
 from homeassistant.helpers import aiohttp_client, config_entry_oauth2_flow
+from homeassistant.helpers.device_registry import DeviceEntry
 
 from .api import (
     ParqetApiClient,
@@ -216,6 +217,23 @@ async def async_setup_entry(
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    entry: ParqetConfigEntry,
+    device_entry: DeviceEntry,
+) -> bool:
+    """Allow Home Assistant to remove stale combined test devices.
+
+    Early multi-account test builds created a virtual combined device with the
+    identifier ``("parqet", "combined")`` and linked it to multiple account
+    config entries. The production combined device now uses
+    ``("parqet", "combined_accounts")`` and is owned by one account entry, so
+    the old empty registry device can be removed safely from affected test
+    systems.
+    """
+    return (DOMAIN, "combined") in device_entry.identifiers
 
 
 async def _async_update_listener(

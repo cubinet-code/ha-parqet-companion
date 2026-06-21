@@ -75,6 +75,24 @@ async def test_unload_entry(
     assert result is True
 
 
+async def test_remove_config_entry_device_allows_stale_combined_device(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """HA can remove the stale test combined device identifier."""
+    from custom_components.parqet import async_remove_config_entry_device
+
+    stale_device = MagicMock(identifiers={(DOMAIN, "combined")})
+    current_device = MagicMock(identifiers={(DOMAIN, "combined_accounts")})
+
+    assert await async_remove_config_entry_device(
+        hass, init_integration, stale_device
+    )
+    assert not await async_remove_config_entry_device(
+        hass, init_integration, current_device
+    )
+
+
 # ─── Setup-time reconciliation ─────────────────────────────────────────────────
 
 
