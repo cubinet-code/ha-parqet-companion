@@ -305,6 +305,7 @@ AGGREGATE_SENSORS = [
 ]
 
 AGGREGATE_SENSOR_KEY = "aggregate_sensors"
+AGGREGATE_COORDINATORS_KEY = "aggregate_coordinators"
 AGGREGATE_DEVICE_ID = "combined"
 
 
@@ -391,6 +392,11 @@ async def async_setup_entry(
     async_add_entities(entities)
 
     integration_data = hass.data.setdefault(DOMAIN, {})
+    aggregate_coordinators = integration_data.setdefault(
+        AGGREGATE_COORDINATORS_KEY, {}
+    )
+    aggregate_coordinators[entry.entry_id] = list(runtime.coordinators.values())
+
     aggregate_sensors: list[ParqetAggregateSensor] | None = integration_data.get(
         AGGREGATE_SENSOR_KEY
     )
@@ -402,6 +408,13 @@ async def async_setup_entry(
         integration_data[AGGREGATE_SENSOR_KEY] = aggregate_sensors
         async_add_entities(aggregate_sensors)
     else:
+        # Entities that were disabled by default are only created once the user
+        # enables them and reloads the integration. Re-offer cached aggregate
+        # entities that have not been added to a platform yet, while only
+        # refreshing listeners for already-active entities.
+        not_added = [sensor for sensor in aggregate_sensors if sensor.hass is None]
+        if not_added:
+            async_add_entities(not_added)
         for sensor in aggregate_sensors:
             sensor.refresh_coordinators()
 
@@ -465,13 +478,16 @@ class ParqetAggregateSensor(SensorEntity):
     @property
     def _coordinators(self) -> list[ParqetDataUpdateCoordinator]:
         """Return all currently loaded Parqet portfolio coordinators."""
-        coordinators: list[ParqetDataUpdateCoordinator] = []
-        for entry in self.hass.config_entries.async_entries(DOMAIN):
-            runtime = getattr(entry, "runtime_data", None)
-            if runtime is None:
-                continue
-            coordinators.extend(runtime.coordinators.values())
-        return coordinators
+        if self.hass is None:
+            return []
+
+        integration_data = self.hass.data.get(DOMAIN, {})
+        coordinators_by_entry = integration_data.get(AGGREGATE_COORDINATORS_KEY, {})
+        return [
+            coordinator
+            for coordinators in coordinators_by_entry.values()
+            for coordinator in coordinators
+        ]
 
     @property
     def _datasets(self) -> list[dict[str, Any]]:
@@ -496,11 +512,11 @@ class ParqetAggregateSensor(SensorEntity):
 
         attrs: dict[str, Any] = {
             "portfolio_count": len(datasets),
-            "source_entry_ids": [
-                entry.entry_id
-                for entry in self.hass.config_entries.async_entries(DOMAIN)
-                if getattr(entry, "runtime_data", None) is not None
-            ],
+            "source_entry_ids": list(
+                self.hass.data.get(DOMAIN, {})
+                .get(AGGREGATE_COORDINATORS_KEY, {})
+                .keys()
+            ),
         }
         if self.entity_description.key == "total_value":
             attrs["top_holdings"] = _combined_top_holdings(datasets)

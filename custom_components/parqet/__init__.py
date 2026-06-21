@@ -234,4 +234,11 @@ async def async_unload_entry(
         for snapshot_mgr in runtime.snapshot_managers.values():
             await snapshot_mgr.async_teardown()
 
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        integration_data = hass.data.get(DOMAIN, {})
+        integration_data.get("aggregate_coordinators", {}).pop(entry.entry_id, None)
+        for sensor in integration_data.get("aggregate_sensors", []):
+            sensor.refresh_coordinators()
+
+    return unload_ok
