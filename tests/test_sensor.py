@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from custom_components.parqet.sensor import _resolve_path
+from custom_components.parqet.sensor import (
+    AGGREGATE_SENSORS,
+    _aggregate_value,
+    _combined_top_holdings,
+    _resolve_path,
+)
 
 from .conftest import MOCK_PERFORMANCE
 
@@ -90,3 +95,35 @@ class TestResolvePath:
         """Test direct key access."""
         data = {"foo": 42}
         assert _resolve_path(data, "foo") == 42
+
+
+class TestAggregateSensors:
+    """Test additive aggregate sensor helpers."""
+
+    def _description(self, key: str):
+        return next(description for description in AGGREGATE_SENSORS if description.key == key)
+
+    def test_total_value_sums_all_payloads(self) -> None:
+        """Test total value aggregation across loaded portfolios."""
+        assert _aggregate_value(
+            [MOCK_PERFORMANCE, MOCK_PERFORMANCE], self._description("total_value")
+        ) == 6094034.9
+
+    def test_percentages_are_not_aggregate_sensors(self) -> None:
+        """Test non-additive percentage KPIs are excluded from combined sensors."""
+        keys = {description.key for description in AGGREGATE_SENSORS}
+        assert "xirr" not in keys
+        assert "ttwror" not in keys
+        assert "unrealized_return_gross" not in keys
+
+    def test_holdings_count_sums_active_holdings(self) -> None:
+        """Test holdings count aggregation uses each payload's active holdings."""
+        assert _aggregate_value(
+            [MOCK_PERFORMANCE, MOCK_PERFORMANCE], self._description("holdings_count")
+        ) == 4
+
+    def test_combined_top_holdings_recomputes_weights(self) -> None:
+        """Test combined top holdings are sorted and weighted against combined total."""
+        top = _combined_top_holdings([MOCK_PERFORMANCE, MOCK_PERFORMANCE])
+        assert top[0] == {"name": "Test Stock", "value": 5500.0, "weight": 25.0}
+        assert len(top) == 4

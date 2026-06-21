@@ -16,6 +16,7 @@ A Home Assistant integration for [Parqet](https://www.parqet.com) — the portfo
 
 - **OAuth2 + PKCE authentication** — secure, one-click setup via Parqet Connect
 - **22 sensors per portfolio** — total value, XIRR, TTWROR, unrealized/realized gains, dividends, fees, taxes, allocations, and more
+- **Combined Parqet sensors** — additive totals across all loaded Parqet accounts/portfolios
 - **Multi-portfolio support** — track multiple portfolios from a single Parqet account
 - **Multi-account support** — add additional Parqet accounts as separate integration entries
 - **Lovelace companion card** with three views:
@@ -89,6 +90,8 @@ You can add more than one Parqet account. Repeat the setup flow for each account
 4. Select the portfolios to track for that account
 
 Each Parqet account becomes its own integration entry, and each selected portfolio becomes a device under that entry. If you add a second account with similar portfolio names, the new entry title includes a short account label so the entries are easier to tell apart.
+
+The integration also creates a **Parqet Combined** device with sensors that aggregate additive values across every loaded Parqet account and portfolio, such as total value, gains, dividends, fees, taxes, allocations, and holdings count. Percentage KPIs such as XIRR and TTWROR are intentionally not combined because they cannot be mathematically summed across separate OAuth accounts without full cash-flow data.
 
 ### Upgrading from v0.3.x
 
