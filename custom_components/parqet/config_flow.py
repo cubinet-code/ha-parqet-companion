@@ -84,6 +84,7 @@ class ParqetOAuth2FlowHandler(
         self._oauth_data: dict[str, Any] = {}
         self._portfolios: list[dict[str, Any]] = []
         self._user_id: str | None = None
+        self._account_title_suffix: str | None = None
 
     @property
     def logger(self) -> logging.Logger:
@@ -146,6 +147,7 @@ class ParqetOAuth2FlowHandler(
             return self.async_abort(reason="unknown")
 
         self._user_id = user_id
+        self._account_title_suffix = _account_title_suffix(user_info)
         self._oauth_data = data
         self._portfolios = portfolios
 
@@ -246,11 +248,12 @@ class ParqetOAuth2FlowHandler(
         self, portfolios: list[dict[str, Any]]
     ) -> ConfigFlowResult:
         """Create the v2 account ConfigEntry covering the selected portfolios."""
-        title = (
+        base_title = (
             portfolios[0]["name"]
             if len(portfolios) == 1
             else f"Parqet ({len(portfolios)} portfolios)"
         )
+        title = self._account_entry_title(base_title)
 
         return self.async_create_entry(
             title=title,
@@ -261,6 +264,23 @@ class ParqetOAuth2FlowHandler(
                 CONF_PORTFOLIO_META: self._portfolio_meta_from_api(portfolios),
             },
         )
+
+    def _account_entry_title(self, base_title: str) -> str:
+        """Return a title that disambiguates additional Parqet accounts.
+
+        The first account keeps the historic title for a non-disruptive setup
+        experience. When a second (or later) account is added, include a stable
+        account suffix so users can tell account entries apart on the Devices &
+        Services page, even when both accounts have similarly named portfolios.
+        """
+        existing_accounts = [
+            entry
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+            if entry.unique_id != self._user_id
+        ]
+        if not existing_accounts or not self._account_title_suffix:
+            return base_title
+        return f"{base_title} ({self._account_title_suffix})"
 
     def _update_account_entry(
         self, entry: ConfigEntry, portfolios: list[dict[str, Any]]
@@ -349,6 +369,22 @@ class ParqetOAuth2FlowHandler(
                 data_schema=vol.Schema({}),
             )
         return await self.async_step_user()
+
+
+def _account_title_suffix(user_info: Mapping[str, Any]) -> str:
+    """Build a non-secret label for account entry titles.
+
+    Parqet currently returns a `userId` but may expose a more human-readable
+    name/email later. Prefer that if present; otherwise use a short, stable
+    user-id suffix. This is only used when multiple Parqet account entries are
+    present, so single-account titles remain unchanged.
+    """
+    for key in ("email", "name", "displayName"):
+        value = user_info.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    user_id = str(user_info.get("userId") or "").strip()
+    return f"account {user_id[-6:]}" if user_id else "account"
 
 
 class ParqetOptionsFlowHandler(OptionsFlow):

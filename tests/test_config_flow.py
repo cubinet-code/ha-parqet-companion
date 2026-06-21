@@ -11,6 +11,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.parqet.const import DOMAIN
+
 from .conftest import (
     MOCK_PORTFOLIO_ID,
     MOCK_PORTFOLIO_NAME,
@@ -62,6 +64,146 @@ async def test_reauth_confirm_proceeds(
         FlowResultType.EXTERNAL_STEP,
         FlowResultType.ABORT,
     )
+
+
+async def _finish_user_oauth_flow(
+    hass: HomeAssistant,
+    user_info: dict,
+    portfolios: list[dict],
+) -> dict:
+    """Start a user flow and inject the OAuth completion payload."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    flow = hass.config_entries.flow._progress.get(result["flow_id"])
+    assert flow is not None
+
+    with patch(
+        "custom_components.parqet.config_flow.aiohttp_client.async_get_clientsession",
+    ), patch(
+        "custom_components.parqet.config_flow.ParqetApiClient",
+    ) as mock_api_cls:
+        mock_api = mock_api_cls.return_value
+        mock_api.async_get_user = AsyncMock(return_value=user_info)
+        mock_api.async_list_portfolios = AsyncMock(return_value=portfolios)
+        return await flow.async_oauth_create_entry(
+            {
+                "auth_implementation": "parqet",
+                "token": {
+                    "access_token": "new_access",
+                    "refresh_token": "new_refresh",
+                    "expires_in": 3600,
+                },
+            }
+        )
+
+
+async def test_first_account_keeps_historic_portfolio_title(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """The first configured account keeps the existing single-account title."""
+    result = await _finish_user_oauth_flow(
+        hass,
+        MOCK_USER_INFO,
+        [
+            {
+                "id": MOCK_PORTFOLIO_ID,
+                "name": MOCK_PORTFOLIO_NAME,
+                "currency": "EUR",
+            }
+        ],
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == MOCK_PORTFOLIO_NAME
+    assert result["data"]["user_id"] == MOCK_USER_INFO["userId"]
+
+
+async def test_second_parqet_account_can_be_added_and_gets_disambiguated_title(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """A different Parqet user is a separate account entry, not a duplicate."""
+    existing = MockConfigEntry(
+        domain=DOMAIN,
+        title="Main Portfolio",
+        unique_id="first_user",
+        version=2,
+        minor_version=1,
+        data={
+            "auth_implementation": "parqet",
+            "token": {"access_token": "old"},
+            "user_id": "first_user",
+            "portfolio_ids": ["first_portfolio"],
+            "portfolio_meta": {
+                "first_portfolio": {"name": "Main Portfolio", "currency": "EUR"}
+            },
+        },
+    )
+    existing.add_to_hass(hass)
+
+    second_user = {**MOCK_USER_INFO, "userId": "second_user_123456"}
+    result = await _finish_user_oauth_flow(
+        hass,
+        second_user,
+        [
+            {
+                "id": "second_portfolio",
+                "name": "Main Portfolio",
+                "currency": "EUR",
+            }
+        ],
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Main Portfolio (account 123456)"
+    assert result["data"]["user_id"] == "second_user_123456"
+    assert result["data"]["portfolio_ids"] == ["second_portfolio"]
+
+
+async def test_second_account_title_prefers_human_readable_user_label(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """If Parqet exposes an email/name, use it instead of an opaque id suffix."""
+    existing = MockConfigEntry(
+        domain=DOMAIN,
+        title="Parqet",
+        unique_id="first_user",
+        version=2,
+        data={"user_id": "first_user"},
+    )
+    existing.add_to_hass(hass)
+
+    result = await _finish_user_oauth_flow(
+        hass,
+        {**MOCK_USER_INFO, "userId": "second_user", "email": "jane@example.test"},
+        [
+            {
+                "id": "second_a",
+                "name": "Broker A",
+                "currency": "EUR",
+            },
+            {
+                "id": "second_b",
+                "name": "Broker B",
+                "currency": "EUR",
+            },
+        ],
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "pick_portfolio"
+
+    flow = hass.config_entries.flow._progress.get(result["flow_id"])
+    assert flow is not None
+    submission = await flow.async_step_pick_portfolio(
+        {"portfolio_ids": ["second_a", "second_b"]}
+    )
+
+    assert submission["type"] is FlowResultType.CREATE_ENTRY
+    assert submission["title"] == "Parqet (2 portfolios) (jane@example.test)"
 
 
 async def test_reauth_updates_token_in_place(
