@@ -147,6 +147,32 @@ describe('discoverPortfolios', () => {
     expect(portfolios[0].name).toBe('Retirement');
   });
 
+  it('discovers source portfolios when configured for the combined device', () => {
+    const hass: Hass = {
+      states: {
+        'sensor.scalable_total_value': makeState({ entity_id: 'sensor.scalable_total_value', attributes: { entry_id: 'entry_s' } }),
+        'sensor.trade_total_value': makeState({ entity_id: 'sensor.trade_total_value', attributes: { entry_id: 'entry_t' } }),
+        'sensor.parqet_combined_total_value': makeState({ entity_id: 'sensor.parqet_combined_total_value', attributes: {} }),
+      },
+      devices: {
+        'device_s': { id: 'device_s', name: 'Scalable', identifiers: [['parqet', 'p_s']] },
+        'device_t': { id: 'device_t', name: 'Trade Republic', identifiers: [['parqet', 'p_t']] },
+        'device_combined': { id: 'device_combined', name: 'Parqet Combined', identifiers: [['parqet', 'combined_accounts']] },
+      },
+      entities: {
+        'sensor.scalable_total_value': { entity_id: 'sensor.scalable_total_value', device_id: 'device_s', platform: 'parqet', unique_id: 'p_s_total_value' },
+        'sensor.trade_total_value': { entity_id: 'sensor.trade_total_value', device_id: 'device_t', platform: 'parqet', unique_id: 'p_t_total_value' },
+        'sensor.parqet_combined_total_value': { entity_id: 'sensor.parqet_combined_total_value', device_id: 'device_combined', platform: 'parqet', unique_id: 'combined_accounts_total_value' },
+      },
+      connection: { sendMessagePromise: async () => ({}) },
+    };
+
+    const portfolios = discoverPortfolios(hass, 'device_combined');
+    expect(portfolios).toHaveLength(2);
+    expect(portfolios.map((p) => p.name)).toEqual(['Scalable', 'Trade Republic']);
+    expect(portfolios.map((p) => p.portfolioId)).toEqual(['p_s', 'p_t']);
+  });
+
   it('returns empty array when no parqet entities found', () => {
     const hass: Hass = {
       states: {},

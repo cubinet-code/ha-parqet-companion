@@ -9,7 +9,7 @@
  * entity registry access.
  */
 
-import type { Hass, DiscoveredPortfolio, HassEntity } from './types';
+import type { Hass, DiscoveredPortfolio, HassEntity, HassDeviceRegistryEntry } from './types';
 import { sensorKeyFromUniqueId } from './const';
 
 /**
@@ -31,14 +31,27 @@ export function discoverPortfolios(
   return _discoverViaStateScan(hass, deviceId);
 }
 
+function isCombinedDevice(device?: HassDeviceRegistryEntry): boolean {
+  return !!device?.identifiers?.some(
+    ([domain, value]) => domain === 'parqet' && value === 'combined_accounts',
+  );
+}
+
 function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfolio[] {
-  // Group parqet entities by device_id
+  const configuredDevice = deviceId ? hass.devices?.[deviceId] : undefined;
+  const configuredDeviceIsCombined = isCombinedDevice(configuredDevice);
+
+  // Group parqet entities by device_id. If the card was added for the virtual
+  // "Parqet Combined" device, discover the real source portfolios instead of
+  // filtering down to the combined device itself. The combined sensors do not
+  // carry a single entry_id/portfolio_id route, so treating them like a normal
+  // portfolio makes the card render "No Parqet portfolios found".
   const deviceGroups = new Map<string, Array<{ entity_id: string; unique_id?: string }>>();
 
   for (const entry of Object.values(hass.entities!)) {
     if (entry.platform !== 'parqet') continue;
     if (!entry.device_id) continue;
-    if (deviceId && entry.device_id !== deviceId) continue;
+    if (deviceId && !configuredDeviceIsCombined && entry.device_id !== deviceId) continue;
 
     if (!deviceGroups.has(entry.device_id)) {
       deviceGroups.set(entry.device_id, []);
@@ -53,6 +66,7 @@ function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfoli
 
   for (const [devId, entries] of deviceGroups) {
     const device = hass.devices?.[devId];
+    if (isCombinedDevice(device)) continue;
     const name = device?.name ?? devId;
 
     // Device identifier is (parqet, portfolio_id) — this is the v2 mapping
