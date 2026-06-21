@@ -425,7 +425,7 @@ async def async_setup_entry(
         # enables them and reloads the integration. Re-offer cached aggregate
         # entities that have not been added to a platform yet, while only
         # refreshing listeners for already-active entities.
-        not_added = [sensor for sensor in aggregate_sensors if sensor.hass is None]
+        not_added = [sensor for sensor in aggregate_sensors if sensor.platform is None]
         if not_added:
             async_add_entities(not_added)
         for sensor in aggregate_sensors:
@@ -445,7 +445,7 @@ class ParqetAggregateSensor(SensorEntity):
         description: ParqetSensorEntityDescription,
     ) -> None:
         """Initialize the aggregate sensor."""
-        self.hass = hass
+        self._hass = hass
         self.entity_description = description
         self._remove_listeners: list[CALLBACK_TYPE] = []
         self._attr_unique_id = f"{AGGREGATE_DEVICE_ID}_{description.key}"
@@ -491,10 +491,7 @@ class ParqetAggregateSensor(SensorEntity):
     @property
     def _coordinators(self) -> list[ParqetDataUpdateCoordinator]:
         """Return all currently loaded Parqet portfolio coordinators."""
-        if self.hass is None:
-            return []
-
-        integration_data = self.hass.data.get(DOMAIN, {})
+        integration_data = self._hass.data.get(DOMAIN, {})
         coordinators_by_entry = integration_data.get(AGGREGATE_COORDINATORS_KEY, {})
         if not _has_multiple_account_sources(coordinators_by_entry):
             return []
@@ -529,7 +526,7 @@ class ParqetAggregateSensor(SensorEntity):
         attrs: dict[str, Any] = {
             "portfolio_count": len(datasets),
             "source_entry_ids": list(
-                self.hass.data.get(DOMAIN, {})
+                self._hass.data.get(DOMAIN, {})
                 .get(AGGREGATE_COORDINATORS_KEY, {})
                 .keys()
             ),
