@@ -14,7 +14,13 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.device_registry import (
+    DeviceEntryType,
+    DeviceInfo,
+)
+from homeassistant.helpers.device_registry import (
+    async_get as async_get_device_registry,
+)
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import ParqetConfigEntry
@@ -306,7 +312,8 @@ AGGREGATE_SENSORS = [
 
 AGGREGATE_SENSOR_KEY = "aggregate_sensors"
 AGGREGATE_COORDINATORS_KEY = "aggregate_coordinators"
-AGGREGATE_DEVICE_ID = "combined"
+AGGREGATE_OWNER_ENTRY_ID_KEY = "aggregate_owner_entry_id"
+AGGREGATE_DEVICE_ID = "combined_accounts"
 
 
 def _active_holdings(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -339,8 +346,32 @@ def _aggregate_value(
 def _has_multiple_account_sources(
     coordinators_by_entry: dict[str, list[ParqetDataUpdateCoordinator]],
 ) -> bool:
-    """Return whether aggregate sensors should be exposed."""
+    """Return whether aggregate sensors can calculate a combined state."""
     return len(coordinators_by_entry) >= 2
+
+
+def _aggregate_owner_entry_id(hass: HomeAssistant) -> str | None:
+    """Return the deterministic config entry that owns aggregate entities."""
+    entry_ids = sorted(entry.entry_id for entry in hass.config_entries.async_entries(DOMAIN))
+    if len(entry_ids) < 2:
+        return None
+    return entry_ids[0]
+
+
+def _cleanup_aggregate_device_entries(
+    hass: HomeAssistant, aggregate_owner_entry_id: str
+) -> None:
+    """Ensure the aggregate device is linked to only its owner entry."""
+    registry = async_get_device_registry(hass)
+    device = registry.async_get_device(identifiers={(DOMAIN, AGGREGATE_DEVICE_ID)})
+    if device is None:
+        return
+
+    for config_entry_id in device.config_entries - {aggregate_owner_entry_id}:
+        registry.async_update_device(
+            device.id,
+            remove_config_entry_id=config_entry_id,
+        )
 
 
 def _combined_top_holdings(datasets: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -407,12 +438,22 @@ async def async_setup_entry(
     aggregate_sensors: list[ParqetAggregateSensor] | None = integration_data.get(
         AGGREGATE_SENSOR_KEY
     )
-    if not _has_multiple_account_sources(aggregate_coordinators):
+    if _aggregate_owner_entry_id(hass) is None:
         if aggregate_sensors is not None:
             for sensor in aggregate_sensors:
                 sensor.refresh_coordinators()
         return
 
+    # Aggregate entities need to be owned by exactly one config entry. If they
+    # are offered from multiple entry platforms, Home Assistant links the
+    # virtual "Parqet Combined" device to multiple account entries and shows it
+    # under each one. The first loaded entry that sees at least two configured
+    # Parqet accounts becomes the aggregate owner; other entries only feed
+    # coordinator data/listeners.
+    aggregate_owner_entry_id = integration_data.setdefault(
+        AGGREGATE_OWNER_ENTRY_ID_KEY, entry.entry_id
+    )
+    _cleanup_aggregate_device_entries(hass, aggregate_owner_entry_id)
     if aggregate_sensors is None:
         aggregate_sensors = [
             ParqetAggregateSensor(hass, description)
@@ -420,6 +461,10 @@ async def async_setup_entry(
         ]
         integration_data[AGGREGATE_SENSOR_KEY] = aggregate_sensors
         async_add_entities(aggregate_sensors)
+    elif entry.entry_id != aggregate_owner_entry_id:
+        for sensor in aggregate_sensors:
+            sensor.refresh_coordinators()
+        return
     else:
         # Entities that were disabled by default are only created once the user
         # enables them and reloads the integration. Re-offer cached aggregate
@@ -463,6 +508,11 @@ class ParqetAggregateSensor(SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register listeners for every loaded portfolio coordinator."""
+        aggregate_owner_entry_id = self._hass.data.get(DOMAIN, {}).get(
+            AGGREGATE_OWNER_ENTRY_ID_KEY
+        )
+        if aggregate_owner_entry_id is not None:
+            _cleanup_aggregate_device_entries(self._hass, aggregate_owner_entry_id)
         self.refresh_coordinators()
 
     async def async_will_remove_from_hass(self) -> None:

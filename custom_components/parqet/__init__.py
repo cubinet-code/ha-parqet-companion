@@ -238,6 +238,8 @@ async def async_unload_entry(
     if unload_ok:
         integration_data = hass.data.get(DOMAIN, {})
         integration_data.get("aggregate_coordinators", {}).pop(entry.entry_id, None)
+        if integration_data.get("aggregate_owner_entry_id") == entry.entry_id:
+            integration_data.pop("aggregate_owner_entry_id", None)
         for sensor in integration_data.get("aggregate_sensors", []):
             sensor.refresh_coordinators()
 
