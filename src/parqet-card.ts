@@ -37,6 +37,56 @@ if (!w['customCards'].some((c: { type: string }) => c.type === 'parqet-companion
 
 // ─── Card element ─────────────────────────────────────────────────────────────
 
+function sum(values: Array<number | null | undefined>): number {
+  return values.reduce<number>((total, value) => total + (value ?? 0), 0);
+}
+
+function combinePerformance(items: PortfolioPerformance[]): PortfolioPerformance {
+  const first = items[0]!;
+  return {
+    ...first,
+    kpis: { inInterval: { xirr: null, ttwror: null } },
+    fees: {
+      inInterval: {
+        fees: sum(items.map((item) => item.fees?.inInterval?.fees)),
+      },
+    },
+    taxes: {
+      inInterval: {
+        taxes: sum(items.map((item) => item.taxes?.inInterval?.taxes)),
+      },
+    },
+    unrealizedGains: {
+      inInterval: {
+        gainGross: sum(items.map((item) => item.unrealizedGains?.inInterval?.gainGross)),
+        gainNet: sum(items.map((item) => item.unrealizedGains?.inInterval?.gainNet)),
+        returnGross: 0,
+        returnNet: 0,
+      },
+    },
+    realizedGains: {
+      inInterval: {
+        gainGross: sum(items.map((item) => item.realizedGains?.inInterval?.gainGross)),
+        gainNet: sum(items.map((item) => item.realizedGains?.inInterval?.gainNet)),
+        returnGross: 0,
+        returnNet: 0,
+      },
+    },
+    dividends: {
+      inInterval: {
+        gainGross: sum(items.map((item) => item.dividends?.inInterval?.gainGross)),
+        gainNet: sum(items.map((item) => item.dividends?.inInterval?.gainNet)),
+        taxes: sum(items.map((item) => item.dividends?.inInterval?.taxes)),
+        fees: sum(items.map((item) => item.dividends?.inInterval?.fees)),
+      },
+    },
+    valuation: {
+      atIntervalStart: sum(items.map((item) => item.valuation?.atIntervalStart)),
+      atIntervalEnd: sum(items.map((item) => item.valuation?.atIntervalEnd)),
+    },
+  };
+}
+
 export class ParqetCompanionCard extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @state() private _config!: ParqetCardConfig;
@@ -376,9 +426,7 @@ export class ParqetCompanionCard extends LitElement {
     this._rateLimited = false;
 
     try {
-      const result = (await this.hass.connection.sendMessagePromise(
-        buildPerformanceMsg(portfolio, this._interval),
-      )) as { performance: PortfolioPerformance; holdings: Holding[] };
+      const result = await this._fetchPerformanceAndHoldings(portfolio);
       if (gen !== this._fetchGen) return;
       this._perfData = result.performance;
       this._holdingsData = (result.holdings || []).filter(
@@ -397,6 +445,40 @@ export class ParqetCompanionCard extends LitElement {
     } finally {
       if (gen === this._fetchGen) this._dataLoading = false;
     }
+  }
+
+  private async _fetchPerformanceAndHoldings(
+    portfolio: DiscoveredPortfolio,
+  ): Promise<{ performance: PortfolioPerformance; holdings: Holding[] }> {
+    if (!portfolio._portfolios?.length) {
+      return (await this.hass.connection.sendMessagePromise(
+        buildPerformanceMsg(portfolio, this._interval),
+      )) as { performance: PortfolioPerformance; holdings: Holding[] };
+    }
+
+    const routesByEntry = new Map<string, Array<{ entryId: string; portfolioId: string }>>();
+    for (const route of portfolio._portfolios) {
+      const routes = routesByEntry.get(route.entryId) ?? [];
+      routes.push(route);
+      routesByEntry.set(route.entryId, routes);
+    }
+
+    const results = await Promise.all(
+      [...routesByEntry.values()].map((routes) => this.hass.connection.sendMessagePromise(
+        buildPerformanceMsg({
+          entryId: routes[0]!.entryId,
+          portfolioId: '__all__',
+          _portfolios: routes,
+        }, this._interval),
+      ) as Promise<{ performance: PortfolioPerformance; holdings: Holding[] }>),
+    );
+
+    if (results.length === 1) return results[0]!;
+
+    return {
+      performance: combinePerformance(results.map((result) => result.performance)),
+      holdings: results.flatMap((result) => result.holdings || []),
+    };
   }
 
   _onIntervalChange(e: CustomEvent) {
