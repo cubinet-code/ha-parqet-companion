@@ -41,17 +41,16 @@ function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfoli
   const configuredDevice = deviceId ? hass.devices?.[deviceId] : undefined;
   const configuredDeviceIsCombined = isCombinedDevice(configuredDevice);
 
-  // Group parqet entities by device_id. If the card was added for the virtual
-  // "Parqet Combined" device, discover the real source portfolios instead of
-  // filtering down to the combined device itself. The combined sensors do not
-  // carry a single entry_id/portfolio_id route, so treating them like a normal
-  // portfolio makes the card render "No Parqet portfolios found".
+  // Group parqet entities by device_id. If the card was explicitly configured
+  // for the virtual "Parqet Combined" device, keep that device and route card
+  // requests through the integration's combined WebSocket handlers. The
+  // combined sensors expose source_entry_ids instead of a single entry_id.
   const deviceGroups = new Map<string, Array<{ entity_id: string; unique_id?: string }>>();
 
   for (const entry of Object.values(hass.entities!)) {
     if (entry.platform !== 'parqet') continue;
     if (!entry.device_id) continue;
-    if (deviceId && !configuredDeviceIsCombined && entry.device_id !== deviceId) continue;
+    if (deviceId && entry.device_id !== deviceId) continue;
 
     if (!deviceGroups.has(entry.device_id)) {
       deviceGroups.set(entry.device_id, []);
@@ -66,7 +65,7 @@ function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfoli
 
   for (const [devId, entries] of deviceGroups) {
     const device = hass.devices?.[devId];
-    if (isCombinedDevice(device)) continue;
+    if (!configuredDeviceIsCombined && isCombinedDevice(device)) continue;
     const name = device?.name ?? devId;
 
     // Device identifier is (parqet, portfolio_id) — this is the v2 mapping
@@ -88,9 +87,14 @@ function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfoli
       const state = hass.states[entity_id];
       if (!state) continue;
 
-      // Get entry_id from state attributes (set by our integration)
+      // Get entry_id from state attributes. Combined sensors expose the source
+      // entry IDs as an array; any loaded entry can authorize the combined WS
+      // request because the backend aggregates across loaded Parqet entries.
       if (!entryId && state.attributes?.['entry_id']) {
         entryId = state.attributes['entry_id'] as string;
+      }
+      if (!entryId && Array.isArray(state.attributes?.['source_entry_ids'])) {
+        entryId = state.attributes['source_entry_ids'][0] as string;
       }
       if (!portfolioId && state.attributes?.['portfolio_id']) {
         portfolioId = state.attributes['portfolio_id'] as string;

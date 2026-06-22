@@ -100,6 +100,87 @@ def _send_rate_limit_error(
     )
 
 
+def _sum_number_values(*values: Any) -> float | int | None:
+    """Sum numeric values, returning None when all inputs are missing."""
+    numbers = [value for value in values if isinstance(value, int | float)]
+    if not numbers:
+        return None
+    return sum(numbers)
+
+
+def _get_nested(data: dict[str, Any], path: tuple[str, ...]) -> Any:
+    """Return a nested dict value or None when the path is missing."""
+    current: Any = data
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+        if current is None:
+            return None
+    return current
+
+
+def _set_nested(data: dict[str, Any], path: tuple[str, ...], value: Any) -> None:
+    """Set a nested dict value, skipping None values."""
+    if value is None:
+        return
+    current = data
+    for key in path[:-1]:
+        current = current.setdefault(key, {})
+    current[path[-1]] = value
+
+
+def aggregate_performance_payloads(payloads: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate additive performance data returned by Parqet.
+
+    Percentage KPIs such as XIRR/TTWROR are intentionally not produced here:
+    independent Parqet accounts cannot be combined by summing percentages.
+    """
+    performances = [payload.get("performance") or {} for payload in payloads]
+    performance: dict[str, Any] = {}
+    additive_paths = [
+        ("valuation", "atIntervalStart"),
+        ("valuation", "atIntervalEnd"),
+        ("fees", "inInterval", "fees"),
+        ("taxes", "inInterval", "taxes"),
+        ("unrealizedGains", "inInterval", "gainGross"),
+        ("unrealizedGains", "inInterval", "gainNet"),
+        ("realizedGains", "inInterval", "gainGross"),
+        ("realizedGains", "inInterval", "gainNet"),
+        ("dividends", "inInterval", "gainGross"),
+        ("dividends", "inInterval", "gainNet"),
+        ("dividends", "inInterval", "taxes"),
+        ("dividends", "inInterval", "fees"),
+    ]
+    for path in additive_paths:
+        _set_nested(
+            performance,
+            path,
+            _sum_number_values(*(_get_nested(perf, path) for perf in performances)),
+        )
+
+    holdings = [
+        holding
+        for payload in payloads
+        for holding in (payload.get("holdings") or [])
+    ]
+    return {"performance": performance, "holdings": holdings}
+
+
+async def _async_get_combined_performance(
+    hass: HomeAssistant,
+    interval: str,
+) -> dict[str, Any]:
+    """Fetch and aggregate performance across all loaded Parqet entries."""
+    payloads: list[dict[str, Any]] = []
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        runtime = entry.runtime_data
+        portfolio_ids = list(runtime.coordinators)
+        if portfolio_ids:
+            payloads.append(await runtime.api.async_get_performance(portfolio_ids, interval))
+    return aggregate_performance_payloads(payloads)
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register the WebSocket API commands."""
     websocket_api.async_register_command(hass, ws_get_holdings)
@@ -196,6 +277,20 @@ async def ws_get_performance(
     """
     runtime = _resolve_runtime(hass, connection, msg)
     if runtime is None:
+        return
+
+    if msg.get("portfolio_id") == "combined_accounts":
+        try:
+            data = await _async_get_combined_performance(hass, msg["interval"])
+        except ParqetRateLimitError as err:
+            _send_rate_limit_error(connection, msg, err)
+            return
+        except ParqetApiError:
+            connection.send_error(
+                msg["id"], "api_error", "Failed to fetch combined performance data"
+            )
+            return
+        connection.send_result(msg["id"], data)
         return
 
     requested_ids: list[str] = msg.get("portfolio_ids") or []

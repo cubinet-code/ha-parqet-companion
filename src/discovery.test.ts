@@ -147,12 +147,15 @@ describe('discoverPortfolios', () => {
     expect(portfolios[0].name).toBe('Retirement');
   });
 
-  it('discovers source portfolios when configured for the combined device', () => {
+  it('discovers the combined virtual portfolio when configured for the combined device', () => {
     const hass: Hass = {
       states: {
         'sensor.scalable_total_value': makeState({ entity_id: 'sensor.scalable_total_value', attributes: { entry_id: 'entry_s' } }),
         'sensor.trade_total_value': makeState({ entity_id: 'sensor.trade_total_value', attributes: { entry_id: 'entry_t' } }),
-        'sensor.parqet_combined_total_value': makeState({ entity_id: 'sensor.parqet_combined_total_value', attributes: {} }),
+        'sensor.parqet_combined_total_value': makeState({
+          entity_id: 'sensor.parqet_combined_total_value',
+          attributes: { source_entry_ids: ['entry_s', 'entry_t'] },
+        }),
       },
       devices: {
         'device_s': { id: 'device_s', name: 'Scalable', identifiers: [['parqet', 'p_s']] },
@@ -168,9 +171,11 @@ describe('discoverPortfolios', () => {
     };
 
     const portfolios = discoverPortfolios(hass, 'device_combined');
-    expect(portfolios).toHaveLength(2);
-    expect(portfolios.map((p) => p.name)).toEqual(['Scalable', 'Trade Republic']);
-    expect(portfolios.map((p) => p.portfolioId)).toEqual(['p_s', 'p_t']);
+    expect(portfolios).toHaveLength(1);
+    expect(portfolios[0].name).toBe('Parqet Combined');
+    expect(portfolios[0].entryId).toBe('entry_s');
+    expect(portfolios[0].portfolioId).toBe('combined_accounts');
+    expect(portfolios[0].sensors['total_value']).toBeDefined();
   });
 
   it('returns empty array when no parqet entities found', () => {
