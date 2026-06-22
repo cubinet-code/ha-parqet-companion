@@ -11,7 +11,7 @@ import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, ViewType, DiscoveredPortfolio, PortfolioPerformance, Holding, HassEntity } from './types';
 import type { IntervalValue } from './const';
 import { DOMAIN } from './const';
-import { discoverPortfolios } from './discovery';
+import { discoverPortfoliosForCard } from './discovery';
 import { buildPerformanceMsg, isRateLimitError } from './utils';
 
 import './components/loading-spinner';
@@ -298,15 +298,16 @@ export class ParqetCompanionCard extends LitElement {
     this._lastEntities = this.hass.entities;
 
     const deviceId = this._config?.device_id;
-    const discovered = discoverPortfolios(this.hass, deviceId);
+    const discovery = discoverPortfoliosForCard(this.hass, deviceId);
+    const discovered = discovery.portfolios;
 
     // Sort before comparing to avoid false positives from iteration order changes
-    const key = (ps: DiscoveredPortfolio[]) => [...ps.map((p) => p.entryId)].sort().join(',');
+    const key = (ps: DiscoveredPortfolio[]) => [...ps.map((p) => `${p.entryId}:${p.portfolioId}`)].sort().join(',');
     if (key(discovered) !== key(this._portfolios)) {
       this._portfolios = discovered;
-      // Default: "All" (-1) when multiple portfolios with no device filter;
-      // first portfolio (0) when single or device-specific.
-      if (discovered.length <= 1 || this._config?.device_id) {
+      // Default: "All" (-1) when multiple portfolios with no active device filter;
+      // first portfolio (0) when single or a valid device-specific card.
+      if (discovered.length <= 1 || discovery.matchedConfiguredDevice) {
         this._selectedIndex = 0;
       } else {
         this._selectedIndex = -1;

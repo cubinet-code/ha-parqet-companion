@@ -7,7 +7,7 @@ import type {
   DiscoveredPortfolio,
 } from './types';
 import { fmtCurrency, fmtPct, valueClass } from './utils';
-import { discoverPortfolios } from './discovery';
+import { discoverPortfoliosForCard } from './discovery';
 import './components/loading-spinner';
 
 // ─── Card registration ──────────────────────────────────────────────────────
@@ -141,10 +141,20 @@ export class ParqetSnapshotCard extends LitElement {
     if (!this.hass?.states) return;
 
     const deviceId = this._config?.device_id;
-    const portfolios = discoverPortfolios(this.hass, deviceId);
-    if (portfolios.length === 0) return;
+    const discovery = discoverPortfoliosForCard(this.hass, deviceId);
+    if (discovery.portfolios.length === 0) return;
 
-    this._portfolio = portfolios[0];
+    if (discovery.usedFallback && discovery.portfolios.length > 1) {
+      this._portfolio = {
+        entryId: discovery.portfolios[0].entryId,
+        portfolioId: 'combined_accounts',
+        name: 'All Portfolios',
+        entityPrefix: null,
+        sensors: {},
+      };
+    } else {
+      this._portfolio = discovery.portfolios[0];
+    }
     void this._load();
   }
 

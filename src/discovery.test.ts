@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { sensorKeyFromUniqueId } from './const';
-import { discoverPortfolios } from './discovery';
+import { discoverPortfolios, discoverPortfoliosForCard } from './discovery';
 import type { Hass, HassEntity } from './types';
 
 // ─── sensorKeyFromUniqueId ────────────────────────────────────────────────────
@@ -176,6 +176,29 @@ describe('discoverPortfolios', () => {
     expect(portfolios[0].entryId).toBe('entry_s');
     expect(portfolios[0].portfolioId).toBe('combined_accounts');
     expect(portfolios[0].sensors['total_value']).toBeDefined();
+  });
+
+  it('falls back to all portfolios when a configured device id is stale', () => {
+    const hass: Hass = {
+      states: {
+        'sensor.scalable_total_value': makeState({ entity_id: 'sensor.scalable_total_value', attributes: { entry_id: 'entry_s' } }),
+        'sensor.trade_total_value': makeState({ entity_id: 'sensor.trade_total_value', attributes: { entry_id: 'entry_t' } }),
+      },
+      devices: {
+        'device_s': { id: 'device_s', name: 'Scalable', identifiers: [['parqet', 'p_s']] },
+        'device_t': { id: 'device_t', name: 'Trade Republic', identifiers: [['parqet', 'p_t']] },
+      },
+      entities: {
+        'sensor.scalable_total_value': { entity_id: 'sensor.scalable_total_value', device_id: 'device_s', platform: 'parqet', unique_id: 'p_s_total_value' },
+        'sensor.trade_total_value': { entity_id: 'sensor.trade_total_value', device_id: 'device_t', platform: 'parqet', unique_id: 'p_t_total_value' },
+      },
+      connection: { sendMessagePromise: async () => ({}) },
+    };
+
+    const result = discoverPortfoliosForCard(hass, 'deleted_combined_device_id');
+    expect(result.usedFallback).toBe(true);
+    expect(result.matchedConfiguredDevice).toBe(false);
+    expect(result.portfolios.map((p) => p.name)).toEqual(['Scalable', 'Trade Republic']);
   });
 
   it('returns empty array when no parqet entities found', () => {

@@ -12,6 +12,39 @@
 import type { Hass, DiscoveredPortfolio, HassEntity, HassDeviceRegistryEntry } from './types';
 import { sensorKeyFromUniqueId } from './const';
 
+export interface PortfolioDiscoveryResult {
+  portfolios: DiscoveredPortfolio[];
+  /** True when the configured device_id still exists and produced portfolios. */
+  matchedConfiguredDevice: boolean;
+  /** True when the configured device_id produced nothing and discovery fell back globally. */
+  usedFallback: boolean;
+}
+
+export function discoverPortfoliosForCard(
+  hass: Hass,
+  deviceId?: string,
+): PortfolioDiscoveryResult {
+  const portfolios = discoverPortfolios(hass, deviceId);
+  if (portfolios.length > 0 || !deviceId) {
+    return {
+      portfolios,
+      matchedConfiguredDevice: Boolean(deviceId && portfolios.length > 0),
+      usedFallback: false,
+    };
+  }
+
+  // Lovelace stores HA device registry IDs in card config. Those IDs can become
+  // stale when Home Assistant removes/recreates a virtual aggregate device
+  // during integration reloads or migrations. Falling back to global discovery
+  // keeps existing dashboards usable instead of rendering "No portfolios found".
+  const fallback = discoverPortfolios(hass);
+  return {
+    portfolios: fallback,
+    matchedConfiguredDevice: false,
+    usedFallback: fallback.length > 0,
+  };
+}
+
 /**
  * Discover all Parqet portfolios from HA state, language-independently.
  *
