@@ -256,9 +256,18 @@ async def async_unload_entry(
     if unload_ok:
         integration_data = hass.data.get(DOMAIN, {})
         integration_data.get("aggregate_coordinators", {}).pop(entry.entry_id, None)
-        if integration_data.get("aggregate_owner_entry_id") == entry.entry_id:
+        is_aggregate_owner = (
+            integration_data.get("aggregate_owner_entry_id") == entry.entry_id
+        )
+        if is_aggregate_owner:
             integration_data.pop("aggregate_owner_entry_id", None)
-        for sensor in integration_data.get("aggregate_sensors", []):
-            sensor.refresh_coordinators()
+            # The sensor platform has just removed these entity instances. Drop
+            # the cached objects as well so the owner's next setup creates and
+            # registers fresh aggregate entities instead of trying to refresh
+            # objects that no longer belong to an entity platform.
+            integration_data.pop("aggregate_sensors", None)
+        else:
+            for sensor in integration_data.get("aggregate_sensors", []):
+                sensor.refresh_coordinators()
 
     return unload_ok

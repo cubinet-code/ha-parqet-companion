@@ -75,6 +75,38 @@ async def test_unload_entry(
     assert result is True
 
 
+async def test_unload_aggregate_owner_discards_removed_entity_objects(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """Reloading the owner must recreate combined entities on platform setup."""
+    from custom_components.parqet import async_unload_entry
+    from custom_components.parqet.sensor import (
+        AGGREGATE_COORDINATORS_KEY,
+        AGGREGATE_OWNER_ENTRY_ID_KEY,
+        AGGREGATE_SENSOR_KEY,
+    )
+
+    other_entry_id = "other_parqet_entry"
+    removed_sensor = MagicMock()
+    hass.data[DOMAIN] = {
+        AGGREGATE_COORDINATORS_KEY: {
+            init_integration.entry_id: [MagicMock()],
+            other_entry_id: [MagicMock()],
+        },
+        AGGREGATE_OWNER_ENTRY_ID_KEY: init_integration.entry_id,
+        AGGREGATE_SENSOR_KEY: [removed_sensor],
+    }
+
+    result = await async_unload_entry(hass, init_integration)
+
+    assert result is True
+    assert init_integration.entry_id not in hass.data[DOMAIN][AGGREGATE_COORDINATORS_KEY]
+    assert AGGREGATE_OWNER_ENTRY_ID_KEY not in hass.data[DOMAIN]
+    assert AGGREGATE_SENSOR_KEY not in hass.data[DOMAIN]
+    removed_sensor.refresh_coordinators.assert_not_called()
+
+
 async def test_remove_config_entry_device_allows_stale_combined_device(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,
