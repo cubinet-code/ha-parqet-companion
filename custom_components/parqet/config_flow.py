@@ -37,6 +37,9 @@ from .api import (
     is_token_endpoint_reauth_error,
 )
 from .const import (
+    COMBINED_UNIQUE_ID,
+    CONF_CURRENCY,
+    CONF_ENTRY_TYPE,
     CONF_INTERVAL,
     CONF_PORTFOLIO_IDS,
     CONF_PORTFOLIO_META,
@@ -45,6 +48,7 @@ from .const import (
     CONF_SNAPSHOT_HOUR,
     CONF_SNAPSHOT_MINUTE,
     CONF_SNAPSHOT_WEEKDAYS_ONLY,
+    CONF_SOURCE_ENTRY_IDS,
     CONF_USER_ID,
     DEFAULT_INTERVAL,
     DEFAULT_SCAN_INTERVAL_MIN,
@@ -52,6 +56,8 @@ from .const import (
     DEFAULT_SNAPSHOT_MINUTE,
     DEFAULT_SNAPSHOT_WEEKDAYS_ONLY,
     DOMAIN,
+    ENTRY_TYPE_ACCOUNT,
+    ENTRY_TYPE_COMBINED,
     INTERVALS,
     MIN_SCAN_INTERVAL_MIN,
     SCOPES,
@@ -99,9 +105,114 @@ class ParqetOAuth2FlowHandler(
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the user step, ensuring OAuth implementation is registered."""
+        """Choose an account login or an explicitly owned Combined entry."""
+        if self.context.get("source") == "user" and self._can_create_combined_entry():
+            if user_input is None:
+                return self.async_show_form(
+                    step_id="user",
+                    data_schema=vol.Schema(
+                        {
+                            vol.Required(CONF_ENTRY_TYPE): vol.In(
+                                [ENTRY_TYPE_ACCOUNT, ENTRY_TYPE_COMBINED]
+                            )
+                        }
+                    ),
+                )
+            if user_input.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_COMBINED:
+                return await self.async_step_combined()
+
         await self._ensure_implementation()
-        return await super().async_step_user(user_input)
+        return await super().async_step_user(None)
+
+    def _account_entries(self) -> list[ConfigEntry]:
+        """Return configured source-account entries, excluding Combined."""
+        return [
+            entry
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+            if entry.data.get(CONF_ENTRY_TYPE, ENTRY_TYPE_ACCOUNT)
+            != ENTRY_TYPE_COMBINED
+        ]
+
+    def _can_create_combined_entry(self) -> bool:
+        """Return whether two accounts exist and no Combined entry exists yet."""
+        entries = self.hass.config_entries.async_entries(DOMAIN)
+        combined_exists = any(
+            entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_COMBINED
+            for entry in entries
+        )
+        return len(self._account_entries()) >= 2 and not combined_exists
+
+    def _combined_currency(self, source_ids: list[str]) -> str | None:
+        """Return one shared source currency, or None for missing/mixed metadata."""
+        entries = {entry.entry_id: entry for entry in self._account_entries()}
+        currencies: set[str] = set()
+        for source_id in source_ids:
+            entry = entries.get(source_id)
+            if entry is None:
+                return None
+            portfolio_meta: dict[str, dict[str, str]] = entry.data.get(
+                CONF_PORTFOLIO_META, {}
+            )
+            portfolio_ids: list[str] = entry.data.get(CONF_PORTFOLIO_IDS, [])
+            for portfolio_id in portfolio_ids:
+                currency = portfolio_meta.get(portfolio_id, {}).get("currency")
+                if not currency:
+                    return None
+                currencies.add(currency)
+        return currencies.pop() if len(currencies) == 1 else None
+
+    async def async_step_combined(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Create the explicit HA-owned Combined config entry."""
+        if not self._can_create_combined_entry():
+            return self.async_abort(reason="combined_not_available")
+
+        account_entries = self._account_entries()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            source_ids = list(user_input.get(CONF_SOURCE_ENTRY_IDS, []))
+            valid_ids = {entry.entry_id for entry in account_entries}
+            if len(source_ids) < 2 or not set(source_ids).issubset(valid_ids):
+                errors["base"] = "at_least_two_sources"
+            else:
+                currency = self._combined_currency(source_ids)
+                if currency is None:
+                    errors["base"] = "mixed_currency"
+                else:
+                    await self.async_set_unique_id(COMBINED_UNIQUE_ID)
+                    self._abort_if_unique_id_configured()
+                    return self.async_create_entry(
+                        title="Parqet Combined",
+                        data={
+                            CONF_ENTRY_TYPE: ENTRY_TYPE_COMBINED,
+                            CONF_SOURCE_ENTRY_IDS: source_ids,
+                            CONF_CURRENCY: currency,
+                        },
+                    )
+
+        options = [
+            SelectOptionDict(value=entry.entry_id, label=entry.title)
+            for entry in account_entries
+        ]
+        return self.async_show_form(
+            step_id="combined",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_SOURCE_ENTRY_IDS,
+                        default=[entry.entry_id for entry in account_entries],
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=options,
+                            multiple=True,
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
+            errors=errors,
+        )
 
     async def _ensure_implementation(self) -> None:
         """Register the OAuth2 implementation if not already present.
@@ -393,7 +504,9 @@ class ParqetOptionsFlowHandler(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage the options."""
+        """Manage account options or Combined source selection."""
+        if self.config_entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_COMBINED:
+            return await self.async_step_combined(user_input)
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
@@ -443,4 +556,72 @@ class ParqetOptionsFlowHandler(OptionsFlow):
                     ): bool,
                 }
             ),
+        )
+
+    async def async_step_combined(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Update the selected account sources for a Combined entry."""
+        account_entries = [
+            entry
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+            if entry.data.get(CONF_ENTRY_TYPE, ENTRY_TYPE_ACCOUNT)
+            != ENTRY_TYPE_COMBINED
+        ]
+        valid_ids = {entry.entry_id for entry in account_entries}
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            source_ids = list(user_input.get(CONF_SOURCE_ENTRY_IDS, []))
+            if len(source_ids) < 2 or not set(source_ids).issubset(valid_ids):
+                errors["base"] = "at_least_two_sources"
+            else:
+                currencies: set[str | None] = set()
+                for account_entry in account_entries:
+                    if account_entry.entry_id not in source_ids:
+                        continue
+                    portfolio_meta = account_entry.data.get(CONF_PORTFOLIO_META, {})
+                    for portfolio_id in account_entry.data.get(CONF_PORTFOLIO_IDS, []):
+                        currencies.add(
+                            portfolio_meta.get(portfolio_id, {}).get("currency")
+                        )
+                if None in currencies or len(currencies) != 1:
+                    errors["base"] = "mixed_currency"
+                else:
+                    currency = next(iter(currencies))
+                    return self.async_create_entry(
+                        data={
+                            CONF_SOURCE_ENTRY_IDS: source_ids,
+                            CONF_CURRENCY: currency,
+                        }
+                    )
+
+        return self.async_show_form(
+            step_id="combined",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_SOURCE_ENTRY_IDS,
+                        default=self.config_entry.options.get(
+                            CONF_SOURCE_ENTRY_IDS,
+                            self.config_entry.data.get(
+                                CONF_SOURCE_ENTRY_IDS,
+                                [entry.entry_id for entry in account_entries],
+                            ),
+                        ),
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[
+                                SelectOptionDict(
+                                    value=entry.entry_id,
+                                    label=entry.title,
+                                )
+                                for entry in account_entries
+                            ],
+                            multiple=True,
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
+            errors=errors,
         )

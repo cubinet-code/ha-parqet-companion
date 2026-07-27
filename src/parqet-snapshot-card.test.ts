@@ -158,7 +158,7 @@ describe('ParqetSnapshotCard', () => {
     expect(card._data.total_daily_pl).toBe(500.0);
   });
 
-  it('uses combined snapshot route when configured device id is stale', () => {
+  it('keeps a stale configured device empty', () => {
     const hass = makeDiscoveryHass();
     const card = new SnapshotCard();
     card.hass = hass;
@@ -166,11 +166,7 @@ describe('ParqetSnapshotCard', () => {
 
     card._discoverPortfolio();
 
-    expect(card._portfolio).toMatchObject({
-      entryId: 'entry_s',
-      portfolioId: 'combined_accounts',
-      name: 'All Portfolios',
-    });
+    expect(card._portfolio).toBeNull();
   });
 
   it('handles missing snapshot gracefully', async () => {

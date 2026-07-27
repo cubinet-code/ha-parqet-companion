@@ -8,9 +8,13 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
 from .snapshot import SnapshotManager
-from .websocket_api import _resolve_runtime, pick_by_portfolio
+from .websocket_api import (
+    CombinedUnavailableError,
+    _combined_source_runtimes,
+    _resolve_runtime,
+    pick_by_portfolio,
+)
 
 
 def _get_snapshot_manager(
@@ -69,11 +73,13 @@ def _holding_to_snapshot_row(holding: dict[str, Any], total_value: float) -> dic
     }
 
 
-def combined_snapshot_data(hass: HomeAssistant) -> dict[str, Any]:
-    """Return combined current holdings when no account-level snapshots exist."""
+def combined_snapshot_data(
+    hass: HomeAssistant,
+    combined_entry_id: str,
+) -> dict[str, Any]:
+    """Return current holdings for the explicitly selected Combined sources."""
     holdings: list[dict[str, Any]] = []
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        runtime = entry.runtime_data
+    for runtime in _combined_source_runtimes(hass, combined_entry_id):
         for coordinator in runtime.coordinators.values():
             holdings.extend(
                 holding
@@ -108,7 +114,12 @@ async def _async_get_snapshot(
 ) -> None:
     """Return snapshot-based daily P&L data (inner logic)."""
     if msg.get("portfolio_id") == "combined_accounts":
-        connection.send_result(msg["id"], combined_snapshot_data(hass))
+        try:
+            data = combined_snapshot_data(hass, msg["entry_id"])
+        except CombinedUnavailableError as err:
+            connection.send_error(msg["id"], err.code, str(err))
+            return
+        connection.send_result(msg["id"], data)
         return
 
     resolved = _get_snapshot_manager(hass, connection, msg)

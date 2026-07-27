@@ -12,16 +12,105 @@ from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, callback
 
 from .api import ParqetApiError, ParqetRateLimitError
-from .const import DEFAULT_INTERVAL, DOMAIN
+from .const import (
+    CONF_CURRENCY,
+    CONF_ENTRY_TYPE,
+    CONF_PORTFOLIO_META,
+    CONF_SOURCE_ENTRY_IDS,
+    DEFAULT_INTERVAL,
+    DOMAIN,
+    ENTRY_TYPE_COMBINED,
+)
 from .coordinator import ParqetDataUpdateCoordinator
 
 if TYPE_CHECKING:
     from . import ParqetAccountRuntime
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class CombinedUnavailableError(ValueError):
+    """Raised when an explicit Combined entry cannot provide a complete result."""
+
+    def __init__(self, code: str, message: str) -> None:
+        """Initialize a structured Combined availability error."""
+        super().__init__(message)
+        self.code = code
+
+
+def _combined_source_runtimes(
+    hass: HomeAssistant,
+    combined_entry_id: str,
+) -> list[ParqetAccountRuntime]:
+    """Resolve every selected loaded same-currency account runtime."""
+    combined_entry = hass.config_entries.async_get_entry(combined_entry_id)
+    if (
+        combined_entry is None
+        or combined_entry.domain != DOMAIN
+        or combined_entry.data.get(CONF_ENTRY_TYPE) != ENTRY_TYPE_COMBINED
+        or combined_entry.state is not ConfigEntryState.LOADED
+    ):
+        raise CombinedUnavailableError(
+            "invalid_entry", "Combined config entry is not loaded"
+        )
+
+    options = getattr(combined_entry, "options", {})
+    source_ids = list(
+        options.get(
+            CONF_SOURCE_ENTRY_IDS,
+            combined_entry.data.get(CONF_SOURCE_ENTRY_IDS, []),
+        )
+    )
+    expected_currency = options.get(
+        CONF_CURRENCY,
+        combined_entry.data.get(CONF_CURRENCY),
+    )
+    if len(source_ids) < 2 or not expected_currency:
+        raise CombinedUnavailableError(
+            "not_available", "Combined sources are not configured"
+        )
+
+    runtimes: list[ParqetAccountRuntime] = []
+    source_currencies: set[str] = set()
+    for source_id in source_ids:
+        source = hass.config_entries.async_get_entry(source_id)
+        if (
+            source is None
+            or source.domain != DOMAIN
+            or source.state is not ConfigEntryState.LOADED
+            or source.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_COMBINED
+        ):
+            raise CombinedUnavailableError(
+                "not_available", "A selected Parqet account is not loaded"
+            )
+        runtime = getattr(source, "runtime_data", None)
+        coordinators = getattr(runtime, "coordinators", None)
+        api = getattr(runtime, "api", None)
+        if not isinstance(coordinators, dict) or api is None:
+            raise CombinedUnavailableError(
+                "not_available", "A selected Parqet account has no runtime data"
+            )
+        portfolio_meta: dict[str, dict[str, str]] = source.data.get(
+            CONF_PORTFOLIO_META, {}
+        )
+        for portfolio_id in coordinators:
+            currency = portfolio_meta.get(portfolio_id, {}).get("currency")
+            if not currency:
+                raise CombinedUnavailableError(
+                    "mixed_currency", "A selected portfolio has no currency metadata"
+                )
+            source_currencies.add(currency)
+        runtimes.append(runtime)
+
+    if source_currencies != {expected_currency}:
+        raise CombinedUnavailableError(
+            "mixed_currency", "Selected portfolios do not share the Combined currency"
+        )
+    return runtimes
 
 
 def _resolve_runtime(
@@ -34,7 +123,17 @@ def _resolve_runtime(
     if entry is None or entry.domain != DOMAIN:
         connection.send_error(msg["id"], "invalid_entry", "Invalid config entry")
         return None
-    return entry.runtime_data
+    if entry.state is not ConfigEntryState.LOADED:
+        connection.send_error(msg["id"], "not_loaded", "Config entry is not loaded")
+        return None
+    runtime = getattr(entry, "runtime_data", None)
+    if (
+        getattr(runtime, "coordinators", None) is None
+        or getattr(runtime, "api", None) is None
+    ):
+        connection.send_error(msg["id"], "invalid_entry", "Not an account entry")
+        return None
+    return runtime
 
 
 def pick_by_portfolio[T](
@@ -170,14 +269,15 @@ def aggregate_performance_payloads(payloads: list[dict[str, Any]]) -> dict[str, 
 async def _async_get_combined_performance(
     hass: HomeAssistant,
     interval: str,
+    combined_entry_id: str,
 ) -> dict[str, Any]:
-    """Fetch and aggregate performance across all loaded Parqet entries."""
+    """Fetch and aggregate performance for the explicitly selected accounts."""
     payloads: list[dict[str, Any]] = []
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        runtime = entry.runtime_data
+    for runtime in _combined_source_runtimes(hass, combined_entry_id):
         portfolio_ids = list(runtime.coordinators)
-        if portfolio_ids:
-            payloads.append(await runtime.api.async_get_performance(portfolio_ids, interval))
+        payloads.append(
+            await runtime.api.async_get_performance(portfolio_ids, interval)
+        )
     return aggregate_performance_payloads(payloads)
 
 
@@ -275,13 +375,14 @@ async def ws_get_performance(
     if the account only has one portfolio).
     Aggregated: pass `entry_id` + `portfolio_ids` (list).
     """
-    runtime = _resolve_runtime(hass, connection, msg)
-    if runtime is None:
-        return
-
     if msg.get("portfolio_id") == "combined_accounts":
         try:
-            data = await _async_get_combined_performance(hass, msg["interval"])
+            data = await _async_get_combined_performance(
+                hass, msg["interval"], msg["entry_id"]
+            )
+        except CombinedUnavailableError as err:
+            connection.send_error(msg["id"], err.code, str(err))
+            return
         except ParqetRateLimitError as err:
             _send_rate_limit_error(connection, msg, err)
             return
@@ -291,6 +392,10 @@ async def ws_get_performance(
             )
             return
         connection.send_result(msg["id"], data)
+        return
+
+    runtime = _resolve_runtime(hass, connection, msg)
+    if runtime is None:
         return
 
     requested_ids: list[str] = msg.get("portfolio_ids") or []

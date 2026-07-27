@@ -10,14 +10,20 @@ import aiohttp
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.parqet import ParqetAccountRuntime
 from custom_components.parqet.const import (
+    CONF_CURRENCY,
+    CONF_ENTRY_TYPE,
     CONF_PORTFOLIO_IDS,
     CONF_PORTFOLIO_META,
+    CONF_SOURCE_ENTRY_IDS,
     DOMAIN,
+    ENTRY_TYPE_COMBINED,
 )
 from custom_components.parqet.coordinator import ParqetDataUpdateCoordinator
 from custom_components.parqet.portfolio_sync import _missing_issue_id
@@ -75,54 +81,111 @@ async def test_unload_entry(
     assert result is True
 
 
-async def test_unload_aggregate_owner_discards_removed_entity_objects(
+async def test_combined_entry_owns_device_and_survives_reload(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,
 ) -> None:
-    """Reloading the owner must recreate combined entities on platform setup."""
-    from custom_components.parqet import async_unload_entry
-    from custom_components.parqet.sensor import (
-        AGGREGATE_COORDINATORS_KEY,
-        AGGREGATE_OWNER_ENTRY_ID_KEY,
-        AGGREGATE_SENSOR_KEY,
-    )
-
-    other_entry_id = "other_parqet_entry"
-    removed_sensor = MagicMock()
-    hass.data[DOMAIN] = {
-        AGGREGATE_COORDINATORS_KEY: {
-            init_integration.entry_id: [MagicMock()],
-            other_entry_id: [MagicMock()],
+    """Combined entities use normal config-entry ownership and registry reuse."""
+    first_runtime = init_integration.runtime_data
+    first_coordinator = first_runtime.coordinators[MOCK_PORTFOLIO_ID]
+    second_portfolio_id = "second_portfolio"
+    second_coordinator = MagicMock()
+    second_coordinator.data = first_coordinator.data
+    second_coordinator.last_update_success = True
+    second_coordinator.async_add_listener.return_value = MagicMock()
+    second = MockConfigEntry(
+        domain=DOMAIN,
+        title="Second account",
+        unique_id="second_user",
+        data={
+            CONF_PORTFOLIO_IDS: [second_portfolio_id],
+            CONF_PORTFOLIO_META: {
+                second_portfolio_id: {
+                    "name": "Second portfolio",
+                    "currency": "EUR",
+                }
+            },
         },
-        AGGREGATE_OWNER_ENTRY_ID_KEY: init_integration.entry_id,
-        AGGREGATE_SENSOR_KEY: [removed_sensor],
-    }
-
-    result = await async_unload_entry(hass, init_integration)
-
-    assert result is True
-    assert init_integration.entry_id not in hass.data[DOMAIN][AGGREGATE_COORDINATORS_KEY]
-    assert AGGREGATE_OWNER_ENTRY_ID_KEY not in hass.data[DOMAIN]
-    assert AGGREGATE_SENSOR_KEY not in hass.data[DOMAIN]
-    removed_sensor.refresh_coordinators.assert_not_called()
-
-
-async def test_remove_config_entry_device_allows_stale_combined_device(
-    hass: HomeAssistant,
-    init_integration: MockConfigEntry,
-) -> None:
-    """HA can remove the stale test combined device identifier."""
-    from custom_components.parqet import async_remove_config_entry_device
-
-    stale_device = MagicMock(identifiers={(DOMAIN, "combined")})
-    current_device = MagicMock(identifiers={(DOMAIN, "combined_accounts")})
-
-    assert await async_remove_config_entry_device(
-        hass, init_integration, stale_device
+        version=2,
+        minor_version=1,
     )
-    assert not await async_remove_config_entry_device(
-        hass, init_integration, current_device
+    second.add_to_hass(hass)
+    second.runtime_data = ParqetAccountRuntime(
+        api=MagicMock(),
+        coordinators={second_portfolio_id: second_coordinator},
     )
+    second.mock_state(hass, ConfigEntryState.LOADED)
+
+    combined = MockConfigEntry(
+        domain=DOMAIN,
+        title="Parqet Combined",
+        unique_id="combined_accounts",
+        data={
+            CONF_ENTRY_TYPE: ENTRY_TYPE_COMBINED,
+            CONF_SOURCE_ENTRY_IDS: [init_integration.entry_id, second.entry_id],
+            CONF_CURRENCY: "EUR",
+        },
+        version=2,
+        minor_version=1,
+    )
+    combined.add_to_hass(hass)
+
+    device_registry = dr.async_get(hass)
+    stale_device = device_registry.async_get_or_create(
+        config_entry_id=init_integration.entry_id,
+        identifiers={(DOMAIN, "combined_accounts")},
+        name="Parqet Combined",
+    )
+    entity_registry = er.async_get(hass)
+    stale_entity = entity_registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "combined_accounts_total_value",
+        config_entry=init_integration,
+        device_id=stale_device.id,
+        suggested_object_id="parqet_combined_total_value",
+    )
+    enabled_detail_entity = entity_registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "combined_accounts_holdings_count",
+        config_entry=init_integration,
+        device_id=stale_device.id,
+        suggested_object_id="parqet_combined_holdings_count",
+    )
+
+    assert await hass.config_entries.async_setup(combined.entry_id)
+    await hass.async_block_till_done()
+
+    entity_id = entity_registry.async_get_entity_id(
+        "sensor", DOMAIN, "combined_accounts_total_value"
+    )
+    assert entity_id is not None
+    assert entity_id == stale_entity.entity_id
+    registry_entry = entity_registry.async_get(entity_id)
+    assert registry_entry is not None
+    assert registry_entry.config_entry_id == combined.entry_id
+    detail_registry_entry = entity_registry.async_get(enabled_detail_entity.entity_id)
+    assert detail_registry_entry is not None
+    assert detail_registry_entry.config_entry_id == combined.entry_id
+    assert hass.states.get(enabled_detail_entity.entity_id) is not None
+
+    device_registry = dr.async_get(hass)
+    device = device_registry.async_get_device(
+        identifiers={(DOMAIN, "combined_accounts")}
+    )
+    assert device is not None
+    assert device.config_entries == {combined.entry_id}
+    original_entity_id = entity_id
+
+    assert await hass.config_entries.async_reload(combined.entry_id)
+    await hass.async_block_till_done()
+
+    assert entity_registry.async_get_entity_id(
+        "sensor", DOMAIN, "combined_accounts_total_value"
+    ) == original_entity_id
+    assert hass.states.get(original_entity_id) is not None
+    assert hass.states.get(enabled_detail_entity.entity_id) is not None
 
 
 # ─── Setup-time reconciliation ─────────────────────────────────────────────────

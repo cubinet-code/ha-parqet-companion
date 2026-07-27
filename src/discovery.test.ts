@@ -154,7 +154,10 @@ describe('discoverPortfolios', () => {
         'sensor.trade_total_value': makeState({ entity_id: 'sensor.trade_total_value', attributes: { entry_id: 'entry_t' } }),
         'sensor.parqet_combined_total_value': makeState({
           entity_id: 'sensor.parqet_combined_total_value',
-          attributes: { source_entry_ids: ['entry_s', 'entry_t'] },
+          attributes: {
+            entry_id: 'entry_combined',
+            source_entry_ids: ['entry_s', 'entry_t'],
+          },
         }),
       },
       devices: {
@@ -173,12 +176,12 @@ describe('discoverPortfolios', () => {
     const portfolios = discoverPortfolios(hass, 'device_combined');
     expect(portfolios).toHaveLength(1);
     expect(portfolios[0].name).toBe('Parqet Combined');
-    expect(portfolios[0].entryId).toBe('entry_s');
+    expect(portfolios[0].entryId).toBe('entry_combined');
     expect(portfolios[0].portfolioId).toBe('combined_accounts');
     expect(portfolios[0].sensors['total_value']).toBeDefined();
   });
 
-  it('falls back to all portfolios when a configured device id is stale', () => {
+  it('keeps a stale configured device empty instead of aggregating globally', () => {
     const hass: Hass = {
       states: {
         'sensor.scalable_total_value': makeState({ entity_id: 'sensor.scalable_total_value', attributes: { entry_id: 'entry_s' } }),
@@ -196,9 +199,9 @@ describe('discoverPortfolios', () => {
     };
 
     const result = discoverPortfoliosForCard(hass, 'deleted_combined_device_id');
-    expect(result.usedFallback).toBe(true);
+    expect(result.usedFallback).toBe(false);
     expect(result.matchedConfiguredDevice).toBe(false);
-    expect(result.portfolios.map((p) => p.name)).toEqual(['Scalable', 'Trade Republic']);
+    expect(result.portfolios).toEqual([]);
   });
 
   it('returns empty array when no parqet entities found', () => {

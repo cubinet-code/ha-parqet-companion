@@ -16,7 +16,7 @@ A Home Assistant integration for [Parqet](https://www.parqet.com) — the portfo
 
 - **OAuth2 + PKCE authentication** — secure, one-click setup via Parqet Connect
 - **22 sensors per portfolio** — total value, XIRR, TTWROR, unrealized/realized gains, dividends, fees, taxes, allocations, and more
-- **Combined Parqet sensors** — additive totals across all loaded Parqet accounts/portfolios
+- **Combined Parqet sensors** — additive totals across explicitly selected same-currency Parqet accounts/portfolios
 - **Multi-portfolio support** — track multiple portfolios from a single Parqet account
 - **Multi-account support** — add additional Parqet accounts as separate integration entries
 - **Lovelace companion card** with three views:
@@ -91,7 +91,11 @@ You can add more than one Parqet account. Repeat the setup flow for each account
 
 Each Parqet account becomes its own integration entry, and each selected portfolio becomes a device under that entry. If you add a second account with similar portfolio names, the new entry title includes a short account label so the entries are easier to tell apart.
 
-The integration also creates a **Parqet Combined** device once at least two Parqet account entries are loaded. Its sensors aggregate additive values across every loaded Parqet account and portfolio, such as total value, gains, dividends, fees, taxes, allocations, and holdings count. Percentage KPIs such as XIRR and TTWROR are intentionally not combined because they cannot be mathematically summed across separate OAuth accounts without full cash-flow data.
+After adding at least two account entries, add Parqet Companion once more and choose **Parqet Combined**. Select the source accounts to aggregate. The selected portfolios must use the same currency; otherwise no Combined entry is created. The Combined entry owns its own device and sensors, while account entries continue to own only their portfolio devices.
+
+The Combined sensors aggregate additive values from the selected accounts, such as total value, gains, dividends, fees, taxes, allocations, and active holdings count. Percentage KPIs such as XIRR and TTWROR are intentionally not combined because they cannot be mathematically summed across separate OAuth accounts without full cash-flow data. If a selected account is unloaded, unavailable, or later reports a different currency, Combined fails closed instead of publishing a partial or mislabeled total.
+
+When upgrading from an earlier multi-account test build, creating the Combined entry migrates existing `combined_accounts_*` entity-registry records and the Combined device to the new owner. Existing entity IDs are retained so dashboards, automations, and history references continue to work.
 
 ### Upgrading from v0.3.x
 

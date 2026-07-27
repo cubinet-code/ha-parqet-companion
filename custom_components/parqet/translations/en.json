@@ -1,6 +1,20 @@
 {
   "config": {
     "step": {
+      "user": {
+        "title": "Set up Parqet Companion",
+        "description": "Add another Parqet account or create a Combined entry for existing accounts.",
+        "data": {
+          "entry_type": "Setup type"
+        }
+      },
+      "combined": {
+        "title": "Create Parqet Combined",
+        "description": "Select at least two accounts with the same portfolio currency. The Combined entry owns the aggregate sensors and fails closed if a selected source is unavailable.",
+        "data": {
+          "source_entry_ids": "Source accounts"
+        }
+      },
       "pick_implementation": {
         "title": "Pick authentication method",
         "description": "Pick an authentication method to connect to your Parqet account."
@@ -19,11 +33,14 @@
     },
     "error": {
       "cannot_connect": "Failed to connect to Parqet API.",
+      "at_least_two_sources": "Select at least two Parqet accounts.",
+      "mixed_currency": "All selected portfolios must use the same currency.",
       "invalid_auth": "Invalid authentication.",
       "unknown": "Unexpected error."
     },
     "abort": {
       "already_configured": "This Parqet account is already configured.",
+      "combined_not_available": "Parqet Combined requires at least two account entries and can only be configured once.",
       "cannot_connect": "Failed to connect to Parqet API.",
       "no_portfolios": "No portfolios found in your Parqet account. Create at least one portfolio at app.parqet.com, then try again.",
       "reauth_required": "Your stored Parqet token is no longer valid. Use the reauth flow instead.",
@@ -47,7 +64,18 @@
           "snapshot_minute": "Snapshot minute (0-59)",
           "snapshot_weekdays_only": "Weekdays only (Mo-Fr) — skips weekends, Monday uses Friday's snapshot"
         }
+      },
+      "combined": {
+        "title": "Parqet Combined sources",
+        "description": "Select the account entries owned by this Combined entry. All selected portfolios must use the same currency.",
+        "data": {
+          "source_entry_ids": "Source accounts"
+        }
       }
+    },
+    "error": {
+      "at_least_two_sources": "Select at least two Parqet accounts.",
+      "mixed_currency": "All selected portfolios must use the same currency."
     }
   },
   "issues": {

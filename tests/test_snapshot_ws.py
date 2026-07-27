@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
 from custom_components.parqet.const import DOMAIN
@@ -56,6 +57,7 @@ def _make_hass_with_snapshot_manager(
 
     entry = MagicMock()
     entry.domain = DOMAIN
+    entry.state = ConfigEntryState.LOADED
     entry.entry_id = entry_id
     entry.runtime_data = MagicMock()
     entry.runtime_data.coordinators = {portfolio_id: coordinator}
@@ -89,6 +91,7 @@ class TestWsGetSnapshot:
         hass = MagicMock(spec=HomeAssistant)
         entry = MagicMock()
         entry.domain = DOMAIN
+        entry.state = ConfigEntryState.LOADED
         entry.runtime_data = MagicMock()
         entry.runtime_data.snapshot_managers = {}
         hass.config_entries.async_get_entry.return_value = entry

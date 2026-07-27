@@ -2,8 +2,25 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
+from unittest.mock import MagicMock
+
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.parqet import ParqetAccountRuntime
+from custom_components.parqet.const import (
+    CONF_CURRENCY,
+    CONF_ENTRY_TYPE,
+    CONF_PORTFOLIO_META,
+    CONF_SOURCE_ENTRY_IDS,
+    DOMAIN,
+    ENTRY_TYPE_COMBINED,
+)
 from custom_components.parqet.sensor import (
     AGGREGATE_SENSORS,
+    ParqetAggregateSensor,
     _aggregate_value,
     _combined_top_holdings,
     _has_multiple_account_sources,
@@ -11,6 +28,62 @@ from custom_components.parqet.sensor import (
 )
 
 from .conftest import MOCK_PERFORMANCE
+
+
+def _account_source(
+    hass: HomeAssistant,
+    *,
+    title: str,
+    portfolio_id: str,
+    currency: str,
+    total_value: float,
+) -> MockConfigEntry:
+    """Add an account source with a real account runtime and coordinator data."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title=title,
+        unique_id=f"user_{portfolio_id}",
+        data={
+            CONF_PORTFOLIO_META: {
+                portfolio_id: {"name": title, "currency": currency}
+            }
+        },
+        version=2,
+        minor_version=1,
+    )
+    entry.add_to_hass(hass)
+    payload = deepcopy(MOCK_PERFORMANCE)
+    payload["performance"]["valuation"]["atIntervalEnd"] = total_value
+    coordinator = MagicMock()
+    coordinator.data = payload
+    coordinator.last_update_success = True
+    coordinator.portfolio_id = portfolio_id
+    entry.runtime_data = ParqetAccountRuntime(
+        api=MagicMock(), coordinators={portfolio_id: coordinator}
+    )
+    return entry
+
+
+def _combined_entry(
+    hass: HomeAssistant,
+    source_ids: list[str],
+    currency: str,
+) -> MockConfigEntry:
+    """Add a Combined config entry selecting explicit account sources."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Parqet Combined",
+        unique_id="combined_accounts",
+        data={
+            CONF_ENTRY_TYPE: ENTRY_TYPE_COMBINED,
+            CONF_SOURCE_ENTRY_IDS: source_ids,
+            CONF_CURRENCY: currency,
+        },
+        version=2,
+        minor_version=1,
+    )
+    entry.add_to_hass(hass)
+    return entry
 
 
 class TestResolvePath:
@@ -123,6 +196,18 @@ class TestAggregateSensors:
             [MOCK_PERFORMANCE, MOCK_PERFORMANCE], self._description("holdings_count")
         ) == 4
 
+    def test_holdings_count_excludes_sold_holdings(self) -> None:
+        """Sold positions must not inflate the active holdings count."""
+        payload = deepcopy(MOCK_PERFORMANCE)
+        sold = deepcopy(payload["holdings"][0])
+        sold["id"] = "sold_holding"
+        sold["position"]["isSold"] = True
+        payload["holdings"].append(sold)
+
+        assert _aggregate_value(
+            [payload], self._description("holdings_count")
+        ) == 2
+
     def test_combined_top_holdings_recomputes_weights(self) -> None:
         """Test combined top holdings are sorted and weighted against combined total."""
         top = _combined_top_holdings([MOCK_PERFORMANCE, MOCK_PERFORMANCE])
@@ -134,3 +219,122 @@ class TestAggregateSensors:
         assert not _has_multiple_account_sources({})
         assert not _has_multiple_account_sources({"entry_1": []})
         assert _has_multiple_account_sources({"entry_1": [], "entry_2": []})
+
+    def test_aggregate_sensor_does_not_poll(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Coordinator listeners are the only aggregate update mechanism."""
+        combined = _combined_entry(hass, [], "EUR")
+        sensor = ParqetAggregateSensor(
+            hass, combined, self._description("total_value")
+        )
+
+        assert sensor.should_poll is False
+
+    def test_combined_uses_only_selected_sources_and_fixed_currency(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """An unrelated later account must not silently change Combined totals."""
+        first = _account_source(
+            hass,
+            title="First",
+            portfolio_id="p1",
+            currency="USD",
+            total_value=100,
+        )
+        second = _account_source(
+            hass,
+            title="Second",
+            portfolio_id="p2",
+            currency="USD",
+            total_value=200,
+        )
+        unrelated = _account_source(
+            hass,
+            title="Unrelated",
+            portfolio_id="p3",
+            currency="USD",
+            total_value=999,
+        )
+        combined = _combined_entry(
+            hass, [first.entry_id, second.entry_id], "USD"
+        )
+        sensor = ParqetAggregateSensor(
+            hass, combined, self._description("total_value")
+        )
+
+        first.mock_state(hass, ConfigEntryState.LOADED)
+        second.mock_state(hass, ConfigEntryState.LOADED)
+        unrelated.mock_state(hass, ConfigEntryState.LOADED)
+        combined.mock_state(hass, ConfigEntryState.LOADED)
+        assert sensor.available
+        assert sensor.native_unit_of_measurement == "USD"
+        assert sensor.native_value == 300
+        assert sensor.extra_state_attributes["source_entry_ids"] == [
+            first.entry_id,
+            second.entry_id,
+        ]
+
+    def test_combined_is_unavailable_when_selected_source_is_unloaded(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Combined must fail closed instead of publishing a partial total."""
+        first = _account_source(
+            hass,
+            title="First",
+            portfolio_id="p1",
+            currency="EUR",
+            total_value=100,
+        )
+        second = _account_source(
+            hass,
+            title="Second",
+            portfolio_id="p2",
+            currency="EUR",
+            total_value=200,
+        )
+        combined = _combined_entry(
+            hass, [first.entry_id, second.entry_id], "EUR"
+        )
+        sensor = ParqetAggregateSensor(
+            hass, combined, self._description("total_value")
+        )
+
+        first.mock_state(hass, ConfigEntryState.LOADED)
+        assert not sensor.available
+        assert sensor.native_value is None
+
+    def test_combined_is_unavailable_after_source_currency_changes(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """A source currency mismatch must not contaminate long-term statistics."""
+        first = _account_source(
+            hass,
+            title="First",
+            portfolio_id="p1",
+            currency="EUR",
+            total_value=100,
+        )
+        second = _account_source(
+            hass,
+            title="Second",
+            portfolio_id="p2",
+            currency="CHF",
+            total_value=200,
+        )
+        combined = _combined_entry(
+            hass, [first.entry_id, second.entry_id], "EUR"
+        )
+        sensor = ParqetAggregateSensor(
+            hass, combined, self._description("total_value")
+        )
+
+        first.mock_state(hass, ConfigEntryState.LOADED)
+        second.mock_state(hass, ConfigEntryState.LOADED)
+        assert sensor.native_unit_of_measurement == "EUR"
+        assert not sensor.available
+        assert sensor.native_value is None

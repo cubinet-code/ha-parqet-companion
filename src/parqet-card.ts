@@ -8,10 +8,9 @@ import { registerElement } from './diagnostics-frontend';
 import { LitElement, html, css, PropertyValues } from 'lit';
 import { property, state } from 'lit/decorators.js';
 
-import type { Hass, ParqetCardConfig, ViewType, DiscoveredPortfolio, PortfolioPerformance, Holding, HassEntity } from './types';
+import type { Hass, ParqetCardConfig, ViewType, DiscoveredPortfolio, PortfolioPerformance, Holding } from './types';
 import type { IntervalValue } from './const';
-import { DOMAIN } from './const';
-import { discoverPortfoliosForCard } from './discovery';
+import { discoverCombinedPortfolio, discoverPortfoliosForCard } from './discovery';
 import { buildPerformanceMsg, isRateLimitError } from './utils';
 
 import './components/loading-spinner';
@@ -36,56 +35,6 @@ if (!w['customCards'].some((c: { type: string }) => c.type === 'parqet-companion
 }
 
 // ─── Card element ─────────────────────────────────────────────────────────────
-
-function sum(values: Array<number | null | undefined>): number {
-  return values.reduce<number>((total, value) => total + (value ?? 0), 0);
-}
-
-function combinePerformance(items: PortfolioPerformance[]): PortfolioPerformance {
-  const first = items[0]!;
-  return {
-    ...first,
-    kpis: { inInterval: { xirr: null, ttwror: null } },
-    fees: {
-      inInterval: {
-        fees: sum(items.map((item) => item.fees?.inInterval?.fees)),
-      },
-    },
-    taxes: {
-      inInterval: {
-        taxes: sum(items.map((item) => item.taxes?.inInterval?.taxes)),
-      },
-    },
-    unrealizedGains: {
-      inInterval: {
-        gainGross: sum(items.map((item) => item.unrealizedGains?.inInterval?.gainGross)),
-        gainNet: sum(items.map((item) => item.unrealizedGains?.inInterval?.gainNet)),
-        returnGross: 0,
-        returnNet: 0,
-      },
-    },
-    realizedGains: {
-      inInterval: {
-        gainGross: sum(items.map((item) => item.realizedGains?.inInterval?.gainGross)),
-        gainNet: sum(items.map((item) => item.realizedGains?.inInterval?.gainNet)),
-        returnGross: 0,
-        returnNet: 0,
-      },
-    },
-    dividends: {
-      inInterval: {
-        gainGross: sum(items.map((item) => item.dividends?.inInterval?.gainGross)),
-        gainNet: sum(items.map((item) => item.dividends?.inInterval?.gainNet)),
-        taxes: sum(items.map((item) => item.dividends?.inInterval?.taxes)),
-        fees: sum(items.map((item) => item.dividends?.inInterval?.fees)),
-      },
-    },
-    valuation: {
-      atIntervalStart: sum(items.map((item) => item.valuation?.atIntervalStart)),
-      atIntervalEnd: sum(items.map((item) => item.valuation?.atIntervalEnd)),
-    },
-  };
-}
 
 export class ParqetCompanionCard extends LitElement {
   @property({ attribute: false }) hass!: Hass;
@@ -307,13 +256,25 @@ export class ParqetCompanionCard extends LitElement {
       this._portfolios = discovered;
       // Default: "All" (-1) when multiple portfolios with no active device filter;
       // first portfolio (0) when single or a valid device-specific card.
-      if (discovered.length <= 1 || discovery.matchedConfiguredDevice) {
+      if (
+        discovered.length <= 1
+        || discovery.matchedConfiguredDevice
+        || !this._canAggregateAll(discovered)
+      ) {
         this._selectedIndex = 0;
       } else {
         this._selectedIndex = -1;
       }
       void this._loadData();
     }
+  }
+
+  private _canAggregateAll(portfolios = this._portfolios): boolean {
+    if (portfolios.length < 2) return false;
+    if (new Set(portfolios.map((portfolio) => portfolio.entryId)).size === 1) {
+      return true;
+    }
+    return discoverCombinedPortfolio(this.hass) !== null;
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -331,7 +292,9 @@ export class ParqetCompanionCard extends LitElement {
     }
 
     const portfolio = this._getActivePortfolio()!;
-    const views: ViewType[] = ['performance', 'holdings', 'activities'];
+    const views: ViewType[] = portfolio.portfolioId === 'combined_accounts'
+      ? ['performance', 'holdings']
+      : ['performance', 'holdings', 'activities'];
 
     return html`
       <ha-card>
@@ -339,7 +302,9 @@ export class ParqetCompanionCard extends LitElement {
           <div class="card-header">
             ${this._portfolios.length > 1 ? html`
               <select class="portfolio-select" @change=${this._onPortfolioChange}>
-                <option value="-1" ?selected=${this._selectedIndex === -1}>All Portfolios</option>
+                ${this._canAggregateAll() ? html`
+                  <option value="-1" ?selected=${this._selectedIndex === -1}>All Portfolios</option>
+                ` : ''}
                 ${this._portfolios.map((p, i) => html`
                   <option value=${i} ?selected=${i === this._selectedIndex}>${p.name}</option>
                 `)}
@@ -373,7 +338,10 @@ export class ParqetCompanionCard extends LitElement {
   }
 
   private _renderView(portfolio: DiscoveredPortfolio) {
-    if (this._activeView === 'performance') {
+    if (
+      this._activeView === 'performance'
+      || (portfolio.portfolioId === 'combined_accounts' && this._activeView === 'activities')
+    ) {
       return html`
         <parqet-performance-view
           .hass=${this.hass}
@@ -457,29 +425,20 @@ export class ParqetCompanionCard extends LitElement {
       )) as { performance: PortfolioPerformance; holdings: Holding[] };
     }
 
-    const routesByEntry = new Map<string, Array<{ entryId: string; portfolioId: string }>>();
-    for (const route of portfolio._portfolios) {
-      const routes = routesByEntry.get(route.entryId) ?? [];
-      routes.push(route);
-      routesByEntry.set(route.entryId, routes);
+    const routes = portfolio._portfolios;
+    const entryIds = new Set(routes.map((route) => route.entryId));
+    let requestPortfolio = portfolio;
+    if (entryIds.size > 1) {
+      const combined = discoverCombinedPortfolio(this.hass);
+      if (!combined) {
+        throw new Error('Parqet Combined entry is required for multi-account totals');
+      }
+      requestPortfolio = combined;
     }
 
-    const results = await Promise.all(
-      [...routesByEntry.values()].map((routes) => this.hass.connection.sendMessagePromise(
-        buildPerformanceMsg({
-          entryId: routes[0]!.entryId,
-          portfolioId: '__all__',
-          _portfolios: routes,
-        }, this._interval),
-      ) as Promise<{ performance: PortfolioPerformance; holdings: Holding[] }>),
-    );
-
-    if (results.length === 1) return results[0]!;
-
-    return {
-      performance: combinePerformance(results.map((result) => result.performance)),
-      holdings: results.flatMap((result) => result.holdings || []),
-    };
+    return (await this.hass.connection.sendMessagePromise(
+      buildPerformanceMsg(requestPortfolio, this._interval),
+    )) as { performance: PortfolioPerformance; holdings: Holding[] };
   }
 
   _onIntervalChange(e: CustomEvent) {
@@ -491,6 +450,16 @@ export class ParqetCompanionCard extends LitElement {
     if (this._cachedProxySource === this._portfolios && this._cachedProxy) {
       return this._cachedProxy;
     }
+    const entryIds = new Set(this._portfolios.map((portfolio) => portfolio.entryId));
+    if (entryIds.size > 1) {
+      const combined = discoverCombinedPortfolio(this.hass);
+      if (combined) {
+        this._cachedProxy = { ...combined, name: 'All Portfolios' };
+        this._cachedProxySource = this._portfolios;
+        return this._cachedProxy;
+      }
+    }
+
     this._cachedProxy = {
       entryId: this._portfolios[0]?.entryId ?? '__all__',
       portfolioId: '__all__',

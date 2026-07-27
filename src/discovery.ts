@@ -25,23 +25,10 @@ export function discoverPortfoliosForCard(
   deviceId?: string,
 ): PortfolioDiscoveryResult {
   const portfolios = discoverPortfolios(hass, deviceId);
-  if (portfolios.length > 0 || !deviceId) {
-    return {
-      portfolios,
-      matchedConfiguredDevice: Boolean(deviceId && portfolios.length > 0),
-      usedFallback: false,
-    };
-  }
-
-  // Lovelace stores HA device registry IDs in card config. Those IDs can become
-  // stale when Home Assistant removes/recreates a virtual aggregate device
-  // during integration reloads or migrations. Falling back to global discovery
-  // keeps existing dashboards usable instead of rendering "No portfolios found".
-  const fallback = discoverPortfolios(hass);
   return {
-    portfolios: fallback,
-    matchedConfiguredDevice: false,
-    usedFallback: fallback.length > 0,
+    portfolios,
+    matchedConfiguredDevice: Boolean(deviceId && portfolios.length > 0),
+    usedFallback: false,
   };
 }
 
@@ -68,6 +55,13 @@ function isCombinedDevice(device?: HassDeviceRegistryEntry): boolean {
   return !!device?.identifiers?.some(
     ([domain, value]) => domain === 'parqet' && value === 'combined_accounts',
   );
+}
+
+/** Return the explicit HA-owned Combined portfolio, when configured. */
+export function discoverCombinedPortfolio(hass: Hass): DiscoveredPortfolio | null {
+  const combinedDevice = Object.values(hass.devices ?? {}).find(isCombinedDevice);
+  if (!combinedDevice) return null;
+  return discoverPortfolios(hass, combinedDevice.id)[0] ?? null;
 }
 
 function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfolio[] {

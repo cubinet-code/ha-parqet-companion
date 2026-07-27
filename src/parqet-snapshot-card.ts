@@ -144,17 +144,7 @@ export class ParqetSnapshotCard extends LitElement {
     const discovery = discoverPortfoliosForCard(this.hass, deviceId);
     if (discovery.portfolios.length === 0) return;
 
-    if (discovery.usedFallback && discovery.portfolios.length > 1) {
-      this._portfolio = {
-        entryId: discovery.portfolios[0].entryId,
-        portfolioId: 'combined_accounts',
-        name: 'All Portfolios',
-        entityPrefix: null,
-        sensors: {},
-      };
-    } else {
-      this._portfolio = discovery.portfolios[0];
-    }
+    this._portfolio = discovery.portfolios[0];
     void this._load();
   }
 

@@ -13,18 +13,23 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.helpers.device_registry import (
-    DeviceEntryType,
-    DeviceInfo,
-)
-from homeassistant.helpers.device_registry import (
-    async_get as async_get_device_registry,
-)
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import ParqetConfigEntry
-from .const import CONF_PORTFOLIO_META, DOMAIN
+from . import ParqetAccountRuntime, ParqetConfigEntry
+from .const import (
+    COMBINED_UNIQUE_ID,
+    CONF_CURRENCY,
+    CONF_ENTRY_TYPE,
+    CONF_PORTFOLIO_META,
+    CONF_SOURCE_ENTRY_IDS,
+    DOMAIN,
+    ENTRY_TYPE_COMBINED,
+    SIGNAL_ACCOUNTS_UPDATED,
+)
 from .coordinator import ParqetDataUpdateCoordinator
 from .entity import ParqetEntity
 
@@ -264,7 +269,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
         value_path="",
-        custom_value_fn=lambda data: len(data.get("holdings") or []),
+        custom_value_fn=lambda data: len(_active_holdings(data)),
         entity_registry_enabled_default=False,
     ),
     ParqetSensorEntityDescription(
@@ -310,10 +315,7 @@ AGGREGATE_SENSORS = [
     if not description.is_percentage
 ]
 
-AGGREGATE_SENSOR_KEY = "aggregate_sensors"
-AGGREGATE_COORDINATORS_KEY = "aggregate_coordinators"
-AGGREGATE_OWNER_ENTRY_ID_KEY = "aggregate_owner_entry_id"
-AGGREGATE_DEVICE_ID = "combined_accounts"
+AGGREGATE_DEVICE_ID = COMBINED_UNIQUE_ID
 
 
 def _active_holdings(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -350,30 +352,6 @@ def _has_multiple_account_sources(
     return len(coordinators_by_entry) >= 2
 
 
-def _aggregate_owner_entry_id(hass: HomeAssistant) -> str | None:
-    """Return the deterministic config entry that owns aggregate entities."""
-    entry_ids = sorted(entry.entry_id for entry in hass.config_entries.async_entries(DOMAIN))
-    if len(entry_ids) < 2:
-        return None
-    return entry_ids[0]
-
-
-def _cleanup_aggregate_device_entries(
-    hass: HomeAssistant, aggregate_owner_entry_id: str
-) -> None:
-    """Ensure the aggregate device is linked to only its owner entry."""
-    registry = async_get_device_registry(hass)
-    device = registry.async_get_device(identifiers={(DOMAIN, AGGREGATE_DEVICE_ID)})
-    if device is None:
-        return
-
-    for config_entry_id in device.config_entries - {aggregate_owner_entry_id}:
-        registry.async_update_device(
-            device.id,
-            remove_config_entry_id=config_entry_id,
-        )
-
-
 def _combined_top_holdings(datasets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return the top 5 active holdings by current value across all payloads."""
     holdings = [holding for data in datasets for holding in _active_holdings(data)]
@@ -404,12 +382,21 @@ async def async_setup_entry(
     entry: ParqetConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Parqet sensor entities for every portfolio under the account."""
+    """Set up account sensors or HA-owned Combined sensors."""
+    if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_COMBINED:
+        async_add_entities(
+            ParqetAggregateSensor(hass, entry, description)
+            for description in AGGREGATE_SENSORS
+        )
+        return
+
     runtime = entry.runtime_data
+    if not isinstance(runtime, ParqetAccountRuntime):
+        return
+
     portfolio_meta: dict[str, dict[str, str]] = entry.data.get(
         CONF_PORTFOLIO_META, {}
     )
-
     entities: list[ParqetSensor] = []
     for portfolio_id, coordinator in runtime.coordinators.items():
         meta = portfolio_meta.get(portfolio_id, {})
@@ -429,70 +416,27 @@ async def async_setup_entry(
 
     async_add_entities(entities)
 
-    integration_data = hass.data.setdefault(DOMAIN, {})
-    aggregate_coordinators = integration_data.setdefault(
-        AGGREGATE_COORDINATORS_KEY, {}
-    )
-    aggregate_coordinators[entry.entry_id] = list(runtime.coordinators.values())
-
-    aggregate_sensors: list[ParqetAggregateSensor] | None = integration_data.get(
-        AGGREGATE_SENSOR_KEY
-    )
-    if _aggregate_owner_entry_id(hass) is None:
-        if aggregate_sensors is not None:
-            for sensor in aggregate_sensors:
-                sensor.refresh_coordinators()
-        return
-
-    # Aggregate entities need to be owned by exactly one config entry. If they
-    # are offered from multiple entry platforms, Home Assistant links the
-    # virtual "Parqet Combined" device to multiple account entries and shows it
-    # under each one. The first loaded entry that sees at least two configured
-    # Parqet accounts becomes the aggregate owner; other entries only feed
-    # coordinator data/listeners.
-    aggregate_owner_entry_id = integration_data.setdefault(
-        AGGREGATE_OWNER_ENTRY_ID_KEY, entry.entry_id
-    )
-    _cleanup_aggregate_device_entries(hass, aggregate_owner_entry_id)
-    if aggregate_sensors is None:
-        aggregate_sensors = [
-            ParqetAggregateSensor(hass, description)
-            for description in AGGREGATE_SENSORS
-        ]
-        integration_data[AGGREGATE_SENSOR_KEY] = aggregate_sensors
-        async_add_entities(aggregate_sensors)
-    elif entry.entry_id != aggregate_owner_entry_id:
-        for sensor in aggregate_sensors:
-            sensor.refresh_coordinators()
-        return
-    else:
-        # Entities that were disabled by default are only created once the user
-        # enables them and reloads the integration. Re-offer cached aggregate
-        # entities that have not been added to a platform yet, while only
-        # refreshing listeners for already-active entities.
-        not_added = [sensor for sensor in aggregate_sensors if sensor.platform is None]
-        if not_added:
-            async_add_entities(not_added)
-        for sensor in aggregate_sensors:
-            sensor.refresh_coordinators()
-
 
 class ParqetAggregateSensor(SensorEntity):
     """A sensor aggregating additive metrics across all loaded Parqet entries."""
 
     _attr_has_entity_name = True
+    _attr_should_poll = False
 
     entity_description: ParqetSensorEntityDescription
 
     def __init__(
         self,
         hass: HomeAssistant,
+        entry: ParqetConfigEntry,
         description: ParqetSensorEntityDescription,
     ) -> None:
-        """Initialize the aggregate sensor."""
+        """Initialize the aggregate sensor owned by the Combined entry."""
         self._hass = hass
+        self._combined_entry = entry
         self.entity_description = description
         self._remove_listeners: list[CALLBACK_TYPE] = []
+        self._remove_source_listener: CALLBACK_TYPE | None = None
         self._attr_unique_id = f"{AGGREGATE_DEVICE_ID}_{description.key}"
         self._attr_entity_registry_enabled_default = (
             description.entity_registry_enabled_default
@@ -503,33 +447,34 @@ class ParqetAggregateSensor(SensorEntity):
             manufacturer="Parqet",
             entry_type=DeviceEntryType.SERVICE,
         )
-        if description.device_class == SensorDeviceClass.MONETARY:
-            self._attr_native_unit_of_measurement = "EUR"
 
     async def async_added_to_hass(self) -> None:
-        """Register listeners for every loaded portfolio coordinator."""
-        aggregate_owner_entry_id = self._hass.data.get(DOMAIN, {}).get(
-            AGGREGATE_OWNER_ENTRY_ID_KEY
+        """Register source lifecycle and coordinator listeners."""
+        self._remove_source_listener = async_dispatcher_connect(
+            self._hass,
+            SIGNAL_ACCOUNTS_UPDATED,
+            self.refresh_coordinators,
         )
-        if aggregate_owner_entry_id is not None:
-            _cleanup_aggregate_device_entries(self._hass, aggregate_owner_entry_id)
         self.refresh_coordinators()
 
     async def async_will_remove_from_hass(self) -> None:
-        """Remove coordinator listeners."""
-        self._clear_listeners()
+        """Remove source lifecycle and coordinator listeners."""
+        self._clear_coordinator_listeners()
+        if self._remove_source_listener is not None:
+            self._remove_source_listener()
+            self._remove_source_listener = None
 
     @callback
-    def _clear_listeners(self) -> None:
-        """Detach all coordinator listeners."""
+    def _clear_coordinator_listeners(self) -> None:
+        """Detach coordinator listeners."""
         for remove_listener in self._remove_listeners:
             remove_listener()
         self._remove_listeners.clear()
 
     @callback
     def refresh_coordinators(self) -> None:
-        """Refresh coordinator listeners after entries are loaded or unloaded."""
-        self._clear_listeners()
+        """Refresh coordinator listeners after account entries change."""
+        self._clear_coordinator_listeners()
         for coordinator in self._coordinators:
             self._remove_listeners.append(
                 coordinator.async_add_listener(self.async_write_ha_state)
@@ -539,22 +484,83 @@ class ParqetAggregateSensor(SensorEntity):
             self.async_write_ha_state()
 
     @property
-    def _coordinators(self) -> list[ParqetDataUpdateCoordinator]:
-        """Return all currently loaded Parqet portfolio coordinators."""
-        integration_data = self._hass.data.get(DOMAIN, {})
-        coordinators_by_entry = integration_data.get(AGGREGATE_COORDINATORS_KEY, {})
-        if not _has_multiple_account_sources(coordinators_by_entry):
-            return []
+    def _configured_source_ids(self) -> list[str]:
+        """Return mutable source selection, falling back to initial entry data."""
+        return list(
+            self._combined_entry.options.get(
+                CONF_SOURCE_ENTRY_IDS,
+                self._combined_entry.data.get(CONF_SOURCE_ENTRY_IDS, []),
+            )
+        )
 
+    @property
+    def _configured_currency(self) -> str | None:
+        """Return the stable currency saved with the source selection."""
+        return self._combined_entry.options.get(
+            CONF_CURRENCY,
+            self._combined_entry.data.get(CONF_CURRENCY),
+        )
+
+    @property
+    def _account_sources(
+        self,
+    ) -> dict[str, tuple[ParqetConfigEntry, ParqetAccountRuntime]]:
+        """Return loaded account entries; the Combined entry is never a source."""
+        sources: dict[str, tuple[ParqetConfigEntry, ParqetAccountRuntime]] = {}
+        configured_source_ids = set(self._configured_source_ids)
+        for entry in self._hass.config_entries.async_entries(DOMAIN):
+            if entry.entry_id not in configured_source_ids:
+                continue
+            if entry.state is not ConfigEntryState.LOADED:
+                continue
+            runtime = getattr(entry, "runtime_data", None)
+            if isinstance(runtime, ParqetAccountRuntime):
+                sources[entry.entry_id] = (entry, runtime)
+        return sources
+
+    @property
+    def _coordinators(self) -> list[ParqetDataUpdateCoordinator]:
+        """Return coordinators only when at least two accounts are loaded."""
+        sources = self._account_sources
+        configured_source_ids = set(self._configured_source_ids)
+        if len(configured_source_ids) < 2 or len(sources) != len(
+            configured_source_ids
+        ):
+            return []
         return [
             coordinator
-            for coordinators in coordinators_by_entry.values()
-            for coordinator in coordinators
+            for _entry, runtime in sources.values()
+            for coordinator in runtime.coordinators.values()
         ]
 
     @property
+    def _common_currency(self) -> str | None:
+        """Return the real shared source currency, or None on missing/mixed data."""
+        expected_currency = self._configured_currency
+        configured_source_ids = set(self._configured_source_ids)
+        sources = self._account_sources
+        if (
+            not expected_currency
+            or len(configured_source_ids) < 2
+            or len(sources) != len(configured_source_ids)
+        ):
+            return None
+
+        currencies: set[str] = set()
+        for entry, runtime in sources.values():
+            portfolio_meta: dict[str, dict[str, str]] = entry.data.get(
+                CONF_PORTFOLIO_META, {}
+            )
+            for portfolio_id in runtime.coordinators:
+                currency = portfolio_meta.get(portfolio_id, {}).get("currency")
+                if not currency:
+                    return None
+                currencies.add(currency)
+        return expected_currency if currencies == {expected_currency} else None
+
+    @property
     def _datasets(self) -> list[dict[str, Any]]:
-        """Return data payloads from loaded coordinators."""
+        """Return data payloads from every loaded source coordinator."""
         return [
             coordinator.data
             for coordinator in self._coordinators
@@ -562,8 +568,31 @@ class ParqetAggregateSensor(SensorEntity):
         ]
 
     @property
+    def available(self) -> bool:
+        """Expose combined values only for complete same-currency sources."""
+        coordinators = self._coordinators
+        return (
+            self._common_currency is not None
+            and bool(coordinators)
+            and len(self._datasets) == len(coordinators)
+            and all(
+                getattr(coordinator, "last_update_success", True)
+                for coordinator in coordinators
+            )
+        )
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        """Use source portfolio metadata instead of a hardcoded currency."""
+        if self.entity_description.device_class == SensorDeviceClass.MONETARY:
+            return self._configured_currency
+        return self.entity_description.native_unit_of_measurement
+
+    @property
     def native_value(self) -> float | int | None:
-        """Return the combined sensor value."""
+        """Return the combined sensor value only when sources are compatible."""
+        if not self.available:
+            return None
         return _aggregate_value(self._datasets, self.entity_description)
 
     @property
@@ -574,12 +603,12 @@ class ParqetAggregateSensor(SensorEntity):
             return None
 
         attrs: dict[str, Any] = {
+            "entry_id": self._combined_entry.entry_id,
+            "portfolio_id": AGGREGATE_DEVICE_ID,
             "portfolio_count": len(datasets),
-            "source_entry_ids": list(
-                self._hass.data.get(DOMAIN, {})
-                .get(AGGREGATE_COORDINATORS_KEY, {})
-                .keys()
-            ),
+            "source_entry_ids": self._configured_source_ids,
+            "loaded_source_entry_ids": list(self._account_sources),
+            "currency": self._common_currency,
         }
         if self.entity_description.key == "total_value":
             attrs["top_holdings"] = _combined_top_holdings(datasets)
