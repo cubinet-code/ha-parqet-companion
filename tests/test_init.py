@@ -24,6 +24,7 @@ from custom_components.parqet.const import (
     CONF_SOURCE_ENTRY_IDS,
     DOMAIN,
     ENTRY_TYPE_COMBINED,
+    SIGNAL_ACCOUNTS_UPDATED,
 )
 from custom_components.parqet.coordinator import ParqetDataUpdateCoordinator
 from custom_components.parqet.portfolio_sync import _missing_issue_id
@@ -79,6 +80,28 @@ async def test_unload_entry(
 
     result = await async_unload_entry(hass, init_integration)
     assert result is True
+
+
+async def test_account_notifies_combined_only_after_loaded_state(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """A replacement account runtime is announced after HA marks it loaded."""
+    with patch("custom_components.parqet.async_dispatcher_send") as send:
+        init_integration._async_set_state(
+            hass,
+            ConfigEntryState.SETUP_IN_PROGRESS,
+            None,
+        )
+        send.assert_not_called()
+
+        init_integration._async_set_state(
+            hass,
+            ConfigEntryState.LOADED,
+            None,
+        )
+
+    send.assert_called_once_with(hass, SIGNAL_ACCOUNTS_UPDATED)
 
 
 async def test_combined_entry_owns_device_and_survives_reload(

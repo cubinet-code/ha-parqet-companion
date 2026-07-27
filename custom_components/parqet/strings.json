@@ -41,6 +41,7 @@
     "abort": {
       "already_configured": "This Parqet account is already configured.",
       "combined_not_available": "Parqet Combined requires at least two account entries and can only be configured once.",
+      "combined_reconfigure_via_options": "Use Configure on the Parqet Combined entry to change its selected source accounts.",
       "cannot_connect": "Failed to connect to Parqet API.",
       "no_portfolios": "No portfolios found in your Parqet account. Create at least one portfolio at app.parqet.com, then try again.",
       "reauth_required": "Your stored Parqet token is no longer valid. Use the reauth flow instead.",

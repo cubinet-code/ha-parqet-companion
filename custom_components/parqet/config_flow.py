@@ -421,6 +421,8 @@ class ParqetOAuth2FlowHandler(
         which dispatches to `_update_account_entry` on submit.
         """
         entry = self._get_reconfigure_entry()
+        if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_COMBINED:
+            return self.async_abort(reason="combined_reconfigure_via_options")
 
         try:
             implementation = (

@@ -56,6 +56,7 @@ describe('ParqetCompanionCard combined routing', () => {
           attributes: {
             entry_id: 'entry_combined',
             portfolio_id: 'combined_accounts',
+            source_entry_ids: ['entry_a', 'entry_b'],
           },
           last_changed: '2026-01-01T00:00:00Z',
           last_updated: '2026-01-01T00:00:00Z',
@@ -93,12 +94,20 @@ describe('ParqetCompanionCard combined routing', () => {
         entityPrefix: null,
         sensors: {},
       },
+      {
+        entryId: 'entry_c',
+        portfolioId: 'p3',
+        name: 'Unselected third account',
+        entityPrefix: null,
+        sensors: {},
+      },
     ];
     const card = new Card();
     card.hass = hass;
     card._portfolios = portfolios;
     card._interval = '1y';
     const portfolio = card._allPortfoliosProxy();
+    expect(portfolio.name).toBe('Parqet Combined');
 
     const result = await card._fetchPerformanceAndHoldings(portfolio);
 

@@ -81,9 +81,16 @@ def combined_snapshot_data(
     holdings: list[dict[str, Any]] = []
     for runtime in _combined_source_runtimes(hass, combined_entry_id):
         for coordinator in runtime.coordinators.values():
+            if coordinator.data is None or not getattr(
+                coordinator, "last_update_success", True
+            ):
+                raise CombinedUnavailableError(
+                    "not_available",
+                    "A selected Parqet portfolio has no current data",
+                )
             holdings.extend(
                 holding
-                for holding in ((coordinator.data or {}).get("holdings") or [])
+                for holding in (coordinator.data.get("holdings") or [])
                 if not (holding.get("position") or {}).get("isSold", False)
             )
     total_value = sum((h.get("position") or {}).get("currentValue") or 0 for h in holdings)

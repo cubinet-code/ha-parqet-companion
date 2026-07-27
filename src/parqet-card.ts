@@ -277,6 +277,13 @@ export class ParqetCompanionCard extends LitElement {
     return discoverCombinedPortfolio(this.hass) !== null;
   }
 
+  private _aggregateOptionLabel(portfolios = this._portfolios): string {
+    if (new Set(portfolios.map((portfolio) => portfolio.entryId)).size > 1) {
+      return discoverCombinedPortfolio(this.hass)?.name ?? 'Parqet Combined';
+    }
+    return 'All Portfolios';
+  }
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   render() {
@@ -303,7 +310,7 @@ export class ParqetCompanionCard extends LitElement {
             ${this._portfolios.length > 1 ? html`
               <select class="portfolio-select" @change=${this._onPortfolioChange}>
                 ${this._canAggregateAll() ? html`
-                  <option value="-1" ?selected=${this._selectedIndex === -1}>All Portfolios</option>
+                  <option value="-1" ?selected=${this._selectedIndex === -1}>${this._aggregateOptionLabel()}</option>
                 ` : ''}
                 ${this._portfolios.map((p, i) => html`
                   <option value=${i} ?selected=${i === this._selectedIndex}>${p.name}</option>
@@ -454,7 +461,7 @@ export class ParqetCompanionCard extends LitElement {
     if (entryIds.size > 1) {
       const combined = discoverCombinedPortfolio(this.hass);
       if (combined) {
-        this._cachedProxy = { ...combined, name: 'All Portfolios' };
+        this._cachedProxy = combined;
         this._cachedProxySource = this._portfolios;
         return this._cachedProxy;
       }

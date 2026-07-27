@@ -137,6 +137,66 @@ def test_combined_snapshot_data_uses_selected_coordinator_holdings() -> None:
     assert [row["weight"] for row in result["holdings"]] == [60.0, 40.0]
 
 
+@pytest.mark.parametrize(
+    ("second_data", "second_success"),
+    [(None, True), (_payload(200, 20, 7, 40), False)],
+)
+def test_combined_snapshot_rejects_incomplete_source_data(
+    second_data: dict | None,
+    second_success: bool,
+) -> None:
+    """Combined snapshot must not publish missing, failed, or stale source data."""
+    entry1 = SimpleNamespace(
+        entry_id="entry1",
+        domain=DOMAIN,
+        state=ConfigEntryState.LOADED,
+        data={CONF_PORTFOLIO_META: {"p1": {"currency": "EUR"}}},
+        runtime_data=SimpleNamespace(
+            api=object(),
+            coordinators={
+                "p1": SimpleNamespace(
+                    data=_payload(100, 10, 5, 60),
+                    last_update_success=True,
+                )
+            },
+        ),
+    )
+    entry2 = SimpleNamespace(
+        entry_id="entry2",
+        domain=DOMAIN,
+        state=ConfigEntryState.LOADED,
+        data={CONF_PORTFOLIO_META: {"p2": {"currency": "EUR"}}},
+        runtime_data=SimpleNamespace(
+            api=object(),
+            coordinators={
+                "p2": SimpleNamespace(
+                    data=second_data,
+                    last_update_success=second_success,
+                )
+            },
+        ),
+    )
+    combined = SimpleNamespace(
+        entry_id="combined",
+        domain=DOMAIN,
+        state=ConfigEntryState.LOADED,
+        data={
+            CONF_ENTRY_TYPE: ENTRY_TYPE_COMBINED,
+            CONF_SOURCE_ENTRY_IDS: ["entry1", "entry2"],
+            CONF_CURRENCY: "EUR",
+        },
+    )
+    entries = {entry.entry_id: entry for entry in (entry1, entry2, combined)}
+    hass = SimpleNamespace(
+        config_entries=SimpleNamespace(async_get_entry=entries.get)
+    )
+
+    with pytest.raises(CombinedUnavailableError) as error:
+        combined_snapshot_data(hass, combined.entry_id)
+
+    assert error.value.code == "not_available"
+
+
 async def test_combined_performance_uses_only_selected_loaded_sources() -> None:
     """Unselected or unloaded entries cannot affect an explicit Combined result."""
     api1 = SimpleNamespace(

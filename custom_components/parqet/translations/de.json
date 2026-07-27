@@ -41,6 +41,7 @@
     "abort": {
       "already_configured": "Dieses Parqet-Konto ist bereits konfiguriert.",
       "combined_not_available": "Parqet Combined benötigt mindestens zwei Konto-Einträge und kann nur einmal konfiguriert werden.",
+      "combined_reconfigure_via_options": "Nutze Konfigurieren beim Eintrag Parqet Combined, um die ausgewählten Quellkonten zu ändern.",
       "cannot_connect": "Verbindung zur Parqet-API fehlgeschlagen.",
       "no_portfolios": "Keine Portfolios in deinem Parqet-Konto gefunden. Lege mindestens ein Portfolio auf app.parqet.com an und versuche es erneut.",
       "reauth_required": "Dein gespeichertes Parqet-Token ist nicht mehr gültig. Bitte nutze stattdessen die erneute Anmeldung.",

@@ -197,6 +197,10 @@ async def test_combined_options_update_selected_sources(
     assert combined.options[CONF_SOURCE_ENTRY_IDS] == [second.entry_id, first.entry_id]
     assert combined.options[CONF_CURRENCY] == "EUR"
 
+    reconfigure = await combined.start_reconfigure_flow(hass)
+    assert reconfigure["type"] is FlowResultType.ABORT
+    assert reconfigure["reason"] == "combined_reconfigure_via_options"
+
 
 async def test_reauth_flow_shows_confirm(
     hass: HomeAssistant,
