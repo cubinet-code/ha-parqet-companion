@@ -136,8 +136,9 @@ async def _async_get_snapshot(
 
     # Refresh the portfolio's coordinator so the snapshot uses current prices.
     entry = hass.config_entries.async_get_entry(msg["entry_id"])
-    if entry is not None and entry.runtime_data is not None:
-        coordinator = entry.runtime_data.coordinators.get(portfolio_id)
+    runtime = getattr(entry, "runtime_data", None) if entry is not None else None
+    if runtime is not None:
+        coordinator = runtime.coordinators.get(portfolio_id)
         if coordinator is not None:
             await coordinator.async_request_refresh()
 

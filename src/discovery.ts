@@ -16,8 +16,6 @@ export interface PortfolioDiscoveryResult {
   portfolios: DiscoveredPortfolio[];
   /** True when the configured device_id still exists and produced portfolios. */
   matchedConfiguredDevice: boolean;
-  /** True when the configured device_id produced nothing and discovery fell back globally. */
-  usedFallback: boolean;
 }
 
 export function discoverPortfoliosForCard(
@@ -28,7 +26,6 @@ export function discoverPortfoliosForCard(
   return {
     portfolios,
     matchedConfiguredDevice: Boolean(deviceId && portfolios.length > 0),
-    usedFallback: false,
   };
 }
 

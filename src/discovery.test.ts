@@ -199,7 +199,6 @@ describe('discoverPortfolios', () => {
     };
 
     const result = discoverPortfoliosForCard(hass, 'deleted_combined_device_id');
-    expect(result.usedFallback).toBe(false);
     expect(result.matchedConfiguredDevice).toBe(false);
     expect(result.portfolios).toEqual([]);
   });
