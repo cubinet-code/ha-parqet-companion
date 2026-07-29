@@ -6,6 +6,15 @@ from homeassistant.components.diagnostics import REDACTED
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.parqet import ParqetCombinedRuntime
+from custom_components.parqet.const import (
+    COMBINED_UNIQUE_ID,
+    CONF_CURRENCY,
+    CONF_ENTRY_TYPE,
+    CONF_SOURCE_ENTRY_IDS,
+    DOMAIN,
+    ENTRY_TYPE_COMBINED,
+)
 from custom_components.parqet.diagnostics import async_get_config_entry_diagnostics
 
 from .conftest import MOCK_PORTFOLIO_ID, MOCK_PORTFOLIO_NAME
@@ -62,3 +71,29 @@ async def test_diagnostics_coordinator_success(
     portfolio = diag["portfolios"][MOCK_PORTFOLIO_ID]
     assert portfolio["last_update_success"] is True
     assert "0:15:00" in portfolio["update_interval"]
+
+
+async def test_diagnostics_for_combined_entry(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """The Combined entry owns no coordinators, so diagnostics must not raise."""
+    combined = MockConfigEntry(
+        domain=DOMAIN,
+        title="Parqet Combined",
+        unique_id=COMBINED_UNIQUE_ID,
+        version=2,
+        minor_version=1,
+        data={
+            CONF_ENTRY_TYPE: ENTRY_TYPE_COMBINED,
+            CONF_SOURCE_ENTRY_IDS: [init_integration.entry_id, "second_entry"],
+            CONF_CURRENCY: "EUR",
+        },
+    )
+    combined.add_to_hass(hass)
+    combined.runtime_data = ParqetCombinedRuntime()
+
+    diag = await async_get_config_entry_diagnostics(hass, combined)
+
+    assert diag["portfolios"] == {}
+    assert diag["config_entry_data"][CONF_ENTRY_TYPE] == ENTRY_TYPE_COMBINED

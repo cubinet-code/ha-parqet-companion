@@ -114,6 +114,14 @@
       "negative_allocation": { "name": "Negative Allokation" }
     }
   },
+  "selector": {
+    "entry_type": {
+      "options": {
+        "account": "Weiteres Parqet-Konto hinzufügen",
+        "combined": "Combined-Eintrag aus vorhandenen Konten erstellen"
+      }
+    }
+  },
   "services": {
     "dump_diagnostics": {
       "name": "Diagnose erstellen",

@@ -112,8 +112,14 @@ class ParqetOAuth2FlowHandler(
                     step_id="user",
                     data_schema=vol.Schema(
                         {
-                            vol.Required(CONF_ENTRY_TYPE): vol.In(
-                                [ENTRY_TYPE_ACCOUNT, ENTRY_TYPE_COMBINED]
+                            vol.Required(
+                                CONF_ENTRY_TYPE, default=ENTRY_TYPE_ACCOUNT
+                            ): SelectSelector(
+                                SelectSelectorConfig(
+                                    options=[ENTRY_TYPE_ACCOUNT, ENTRY_TYPE_COMBINED],
+                                    mode=SelectSelectorMode.LIST,
+                                    translation_key="entry_type",
+                                )
                             )
                         }
                     ),
