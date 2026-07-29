@@ -33,6 +33,11 @@ venv/
 # Claude Code (local dev tooling)
 .claude/
 
+# Other agent harnesses (local dev tooling)
+.agents/
+.codex/
+AGENTS.md
+
 # Local dev scripts
 deploy.sh
 
