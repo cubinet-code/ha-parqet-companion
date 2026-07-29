@@ -173,6 +173,8 @@
                       "crypto",
                       "commodity",
                       "custom",
+                      "insurance",
+                      "p2p",
                       "real_estate"
                     ]
                   }
@@ -185,6 +187,8 @@
                     "crypto",
                     "commodity",
                     "custom",
+                    "insurance",
+                    "p2p",
                     "real_estate"
                   ]
                 }
@@ -414,6 +418,102 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RealEstateHoldingCreationBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldingCreationResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "connect": [
+              "portfolio:write"
+            ]
+          }
+        ],
+        "summary": ""
+      }
+    },
+    "/portfolios/{portfolioId}/holdings/insurance": {
+      "post": {
+        "description": "Create a new insurance holding for the user.\n\nOnce you have created an insurance holding, you can create activities by using the create activities endpoint.",
+        "operationId": "portfolios_holdings_create_insurance",
+        "parameters": [
+          {
+            "name": "portfolioId",
+            "required": true,
+            "in": "path",
+            "description": "Id of the parqet portfolio",
+            "schema": {
+              "example": "68dbc0b6cf3c111e1be1d411",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InsuranceHoldingCreationBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldingCreationResponseDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "connect": [
+              "portfolio:write"
+            ]
+          }
+        ],
+        "summary": ""
+      }
+    },
+    "/portfolios/{portfolioId}/holdings/p2p": {
+      "post": {
+        "description": "Create a new P2P holding for the user.\n\nOnce you have created a P2P holding, you can create activities by using the create activities endpoint.",
+        "operationId": "portfolios_holdings_create_p2p",
+        "parameters": [
+          {
+            "name": "portfolioId",
+            "required": true,
+            "in": "path",
+            "description": "Id of the parqet portfolio",
+            "schema": {
+              "example": "68dbc0b6cf3c111e1be1d411",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/P2PHoldingCreationBodyDto"
               }
             }
           }
@@ -708,14 +808,6 @@
                 {
                   "type": "object",
                   "properties": {
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -771,7 +863,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -827,6 +919,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -853,6 +946,14 @@
                       "maxLength": 255,
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
+                    },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
                     },
                     "type": {
                       "type": "string",
@@ -882,10 +983,10 @@
                     }
                   },
                   "required": [
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "type",
                     "assetIdentifierType",
                     "isin"
@@ -896,14 +997,6 @@
                 {
                   "type": "object",
                   "properties": {
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -959,7 +1052,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -1015,6 +1108,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -1041,6 +1135,14 @@
                       "maxLength": 255,
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
+                    },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
                     },
                     "type": {
                       "type": "string",
@@ -1067,10 +1169,10 @@
                     }
                   },
                   "required": [
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "type",
                     "assetIdentifierType",
                     "symbol"
@@ -1081,14 +1183,6 @@
                 {
                   "type": "object",
                   "properties": {
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -1144,7 +1238,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -1200,6 +1294,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -1226,6 +1321,10 @@
                       "maxLength": 255,
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
+                    },
+                    "amount": {
+                      "type": "number",
+                      "example": 2342
                     },
                     "type": {
                       "type": "string",
@@ -1252,10 +1351,9 @@
                     }
                   },
                   "required": [
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "amount",
                     "type",
                     "assetIdentifierType",
                     "holding_id"
@@ -1266,14 +1364,6 @@
                 {
                   "type": "object",
                   "properties": {
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -1329,7 +1419,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -1385,6 +1475,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -1411,6 +1502,14 @@
                       "maxLength": 255,
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
+                    },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
                     },
                     "type": {
                       "type": "string",
@@ -1437,10 +1536,10 @@
                     }
                   },
                   "required": [
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "type",
                     "assetIdentifierType",
                     "holding_id"
@@ -1451,14 +1550,6 @@
                 {
                   "type": "object",
                   "properties": {
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -1514,7 +1605,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -1570,6 +1661,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -1596,6 +1688,14 @@
                       "maxLength": 255,
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
+                    },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
                     },
                     "type": {
                       "type": "string",
@@ -1622,10 +1722,10 @@
                     }
                   },
                   "required": [
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "type",
                     "assetIdentifierType",
                     "holding_id"
@@ -1636,14 +1736,6 @@
                 {
                   "type": "object",
                   "properties": {
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -1699,7 +1791,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -1755,6 +1847,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -1782,6 +1875,374 @@
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
                     },
+                    "amount": {
+                      "type": "number",
+                      "example": 2342
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "buy",
+                        "sell",
+                        "dividend",
+                        "transfer_in",
+                        "transfer_out",
+                        "fees_taxes",
+                        "deposit",
+                        "withdrawal"
+                      ],
+                      "example": "buy"
+                    },
+                    "assetIdentifierType": {
+                      "type": "string",
+                      "const": "insurance"
+                    },
+                    "holding_id": {
+                      "type": "string",
+                      "example": "hld_698264d2cb0f0369b3892235"
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "datetime",
+                    "amount",
+                    "type",
+                    "assetIdentifierType",
+                    "holding_id"
+                  ],
+                  "description": "Select this type for activities related to insurance holdings. Payouts use dividend activities. Transfers use deposit and withdrawal activities.",
+                  "title": "Insurance Activity"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "tax": {
+                      "example": 0,
+                      "type": "number"
+                    },
+                    "fee": {
+                      "example": 0,
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "ARS",
+                        "AUD",
+                        "BRL",
+                        "BWP",
+                        "CAD",
+                        "CHF",
+                        "CLP",
+                        "CNY",
+                        "CZK",
+                        "DKK",
+                        "EUR",
+                        "GBP",
+                        "GBX",
+                        "GEL",
+                        "HKD",
+                        "HUF",
+                        "IDR",
+                        "ILS",
+                        "INR",
+                        "ISK",
+                        "JPY",
+                        "KRW",
+                        "KZT",
+                        "MAD",
+                        "MXN",
+                        "MYR",
+                        "NOK",
+                        "NZD",
+                        "PEN",
+                        "PHP",
+                        "PLN",
+                        "RUB",
+                        "SAR",
+                        "SEK",
+                        "SGD",
+                        "THB",
+                        "TRY",
+                        "TWD",
+                        "USD",
+                        "USDC",
+                        "VND",
+                        "ZAR",
+                        "ZMW"
+                      ],
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
+                    },
+                    "datetime": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                      "example": "2025-11-17T09:33:39.892Z"
+                    },
+                    "description": {
+                      "example": "Optional description that is visible to the user",
+                      "type": "string"
+                    },
+                    "broker": {
+                      "example": "bitpanda",
+                      "type": "string",
+                      "enum": [
+                        "1822direkt",
+                        "bison",
+                        "bitpanda",
+                        "bsdex",
+                        "bondora",
+                        "baader_bank",
+                        "cap_trader",
+                        "coinbase",
+                        "coinbase_pro",
+                        "comdirect",
+                        "consors_bank",
+                        "cortal_consors",
+                        "commerzbank",
+                        "crypto_com",
+                        "dadat",
+                        "deutsche_bank",
+                        "degiro",
+                        "dkb",
+                        "ebase",
+                        "erste_bank",
+                        "extra_etf",
+                        "ffb",
+                        "finanzen_zero",
+                        "finvesto",
+                        "flatex",
+                        "fondsdepot_bank",
+                        "generic_csv",
+                        "gratisbroker",
+                        "hypo_vereinsbank",
+                        "ing",
+                        "interactive_brokers",
+                        "just_trade",
+                        "kraken",
+                        "lgt_bank",
+                        "onvista",
+                        "oskar",
+                        "peaks",
+                        "portfolio_performance",
+                        "postbank",
+                        "quirion",
+                        "saxo_bank",
+                        "s_broker",
+                        "scalable_capital",
+                        "smartbroker",
+                        "spk_vb",
+                        "smavesto",
+                        "smartbroker_plus",
+                        "sunrise",
+                        "sutorbank",
+                        "swissquote",
+                        "targobank",
+                        "tomorrow",
+                        "trade_republic",
+                        "traders_place",
+                        "trading212",
+                        "union_investment",
+                        "vanguard",
+                        "v_bank",
+                        "volksbank",
+                        "yuh"
+                      ]
+                    },
+                    "externalId": {
+                      "type": "string",
+                      "maxLength": 255,
+                      "pattern": "^[A-Za-z0-9\\-_]+$",
+                      "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
+                    },
+                    "amount": {
+                      "type": "number",
+                      "example": 2342
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "buy",
+                        "sell",
+                        "dividend",
+                        "transfer_in",
+                        "transfer_out",
+                        "fees_taxes",
+                        "deposit",
+                        "withdrawal"
+                      ],
+                      "example": "buy"
+                    },
+                    "assetIdentifierType": {
+                      "type": "string",
+                      "const": "p2p"
+                    },
+                    "holding_id": {
+                      "type": "string",
+                      "example": "hld_698264d2cb0f0369b3892235"
+                    }
+                  },
+                  "required": [
+                    "currency",
+                    "datetime",
+                    "amount",
+                    "type",
+                    "assetIdentifierType",
+                    "holding_id"
+                  ],
+                  "description": "Select this type for activities related to P2P holdings. P2P payouts use dividend activities. Transfers use deposit and withdrawal activities.",
+                  "title": "P2P Activity"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "tax": {
+                      "example": 0,
+                      "type": "number"
+                    },
+                    "fee": {
+                      "example": 0,
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "ARS",
+                        "AUD",
+                        "BRL",
+                        "BWP",
+                        "CAD",
+                        "CHF",
+                        "CLP",
+                        "CNY",
+                        "CZK",
+                        "DKK",
+                        "EUR",
+                        "GBP",
+                        "GBX",
+                        "GEL",
+                        "HKD",
+                        "HUF",
+                        "IDR",
+                        "ILS",
+                        "INR",
+                        "ISK",
+                        "JPY",
+                        "KRW",
+                        "KZT",
+                        "MAD",
+                        "MXN",
+                        "MYR",
+                        "NOK",
+                        "NZD",
+                        "PEN",
+                        "PHP",
+                        "PLN",
+                        "RUB",
+                        "SAR",
+                        "SEK",
+                        "SGD",
+                        "THB",
+                        "TRY",
+                        "TWD",
+                        "USD",
+                        "USDC",
+                        "VND",
+                        "ZAR",
+                        "ZMW"
+                      ],
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
+                    },
+                    "datetime": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                      "example": "2025-11-17T09:33:39.892Z"
+                    },
+                    "description": {
+                      "example": "Optional description that is visible to the user",
+                      "type": "string"
+                    },
+                    "broker": {
+                      "example": "bitpanda",
+                      "type": "string",
+                      "enum": [
+                        "1822direkt",
+                        "bison",
+                        "bitpanda",
+                        "bsdex",
+                        "bondora",
+                        "baader_bank",
+                        "cap_trader",
+                        "coinbase",
+                        "coinbase_pro",
+                        "comdirect",
+                        "consors_bank",
+                        "cortal_consors",
+                        "commerzbank",
+                        "crypto_com",
+                        "dadat",
+                        "deutsche_bank",
+                        "degiro",
+                        "dkb",
+                        "ebase",
+                        "erste_bank",
+                        "extra_etf",
+                        "ffb",
+                        "finanzen_zero",
+                        "finvesto",
+                        "flatex",
+                        "fondsdepot_bank",
+                        "generic_csv",
+                        "gratisbroker",
+                        "hypo_vereinsbank",
+                        "ing",
+                        "interactive_brokers",
+                        "just_trade",
+                        "kraken",
+                        "lgt_bank",
+                        "onvista",
+                        "oskar",
+                        "peaks",
+                        "portfolio_performance",
+                        "postbank",
+                        "quirion",
+                        "saxo_bank",
+                        "s_broker",
+                        "scalable_capital",
+                        "smartbroker",
+                        "spk_vb",
+                        "smavesto",
+                        "smartbroker_plus",
+                        "sunrise",
+                        "sutorbank",
+                        "swissquote",
+                        "targobank",
+                        "tomorrow",
+                        "trade_republic",
+                        "traders_place",
+                        "trading212",
+                        "union_investment",
+                        "vanguard",
+                        "v_bank",
+                        "volksbank",
+                        "yuh"
+                      ]
+                    },
+                    "externalId": {
+                      "type": "string",
+                      "maxLength": 255,
+                      "pattern": "^[A-Za-z0-9\\-_]+$",
+                      "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
+                    },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
+                    },
                     "type": {
                       "type": "string",
                       "enum": [
@@ -1807,10 +2268,10 @@
                     }
                   },
                   "required": [
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "type",
                     "assetIdentifierType",
                     "holding_id"
@@ -1882,14 +2343,6 @@
                       "type": "string",
                       "const": "buy"
                     },
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -1945,7 +2398,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -2001,6 +2454,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -2028,6 +2482,14 @@
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
                     },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -2042,6 +2504,8 @@
                         "crypto",
                         "commodity",
                         "custom",
+                        "insurance",
+                        "p2p",
                         "real_estate"
                       ]
                     },
@@ -2131,6 +2595,44 @@
                           "properties": {
                             "assetIdentifierType": {
                               "type": "string",
+                              "const": "insurance"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "Insurance"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
+                              "const": "p2p"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "P2P"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
                               "const": "commodity"
                             },
                             "name": {
@@ -2171,20 +2673,113 @@
                     },
                     "amountNet": {
                       "type": "number"
+                    },
+                    "fx": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "rate": {
+                              "type": "number",
+                              "example": 1.234
+                            },
+                            "originalCurrency": {
+                              "type": "string",
+                              "enum": [
+                                "ARS",
+                                "AUD",
+                                "BRL",
+                                "BWP",
+                                "CAD",
+                                "CHF",
+                                "CLP",
+                                "CNY",
+                                "CZK",
+                                "DKK",
+                                "EUR",
+                                "GBP",
+                                "GBX",
+                                "GEL",
+                                "HKD",
+                                "HUF",
+                                "IDR",
+                                "ILS",
+                                "INR",
+                                "ISK",
+                                "JPY",
+                                "KRW",
+                                "KZT",
+                                "MAD",
+                                "MXN",
+                                "MYR",
+                                "NOK",
+                                "NZD",
+                                "PEN",
+                                "PHP",
+                                "PLN",
+                                "RUB",
+                                "SAR",
+                                "SEK",
+                                "SGD",
+                                "THB",
+                                "TRY",
+                                "TWD",
+                                "USD",
+                                "USDC",
+                                "VND",
+                                "ZAR",
+                                "ZMW"
+                              ],
+                              "example": "USD"
+                            },
+                            "originalPrice": {
+                              "type": "number",
+                              "example": 234.2
+                            },
+                            "originalTax": {
+                              "type": "number"
+                            },
+                            "originalFee": {
+                              "type": "number"
+                            },
+                            "originalAmount": {
+                              "type": "number"
+                            },
+                            "originalAmountNet": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "rate",
+                            "originalCurrency",
+                            "originalPrice",
+                            "originalTax",
+                            "originalFee",
+                            "originalAmount",
+                            "originalAmountNet"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "FX information if the activity was executed in a different currency than the portfolio currency - if null the activity was executed in the portfolio currency"
                     }
                   },
                   "required": [
                     "type",
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "id",
                     "holdingId",
                     "holdingAssetType",
                     "asset",
                     "amount",
-                    "amountNet"
+                    "amountNet",
+                    "fx"
                   ],
                   "additionalProperties": false,
                   "title": "Buy Activity"
@@ -2208,14 +2803,6 @@
                     "realizedGainsNet": {
                       "type": "number"
                     },
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -2271,7 +2858,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -2327,6 +2914,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -2354,6 +2942,14 @@
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
                     },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -2368,6 +2964,8 @@
                         "crypto",
                         "commodity",
                         "custom",
+                        "insurance",
+                        "p2p",
                         "real_estate"
                       ]
                     },
@@ -2457,6 +3055,44 @@
                           "properties": {
                             "assetIdentifierType": {
                               "type": "string",
+                              "const": "insurance"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "Insurance"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
+                              "const": "p2p"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "P2P"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
                               "const": "commodity"
                             },
                             "name": {
@@ -2497,6 +3133,98 @@
                     },
                     "amountNet": {
                       "type": "number"
+                    },
+                    "fx": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "rate": {
+                              "type": "number",
+                              "example": 1.234
+                            },
+                            "originalCurrency": {
+                              "type": "string",
+                              "enum": [
+                                "ARS",
+                                "AUD",
+                                "BRL",
+                                "BWP",
+                                "CAD",
+                                "CHF",
+                                "CLP",
+                                "CNY",
+                                "CZK",
+                                "DKK",
+                                "EUR",
+                                "GBP",
+                                "GBX",
+                                "GEL",
+                                "HKD",
+                                "HUF",
+                                "IDR",
+                                "ILS",
+                                "INR",
+                                "ISK",
+                                "JPY",
+                                "KRW",
+                                "KZT",
+                                "MAD",
+                                "MXN",
+                                "MYR",
+                                "NOK",
+                                "NZD",
+                                "PEN",
+                                "PHP",
+                                "PLN",
+                                "RUB",
+                                "SAR",
+                                "SEK",
+                                "SGD",
+                                "THB",
+                                "TRY",
+                                "TWD",
+                                "USD",
+                                "USDC",
+                                "VND",
+                                "ZAR",
+                                "ZMW"
+                              ],
+                              "example": "USD"
+                            },
+                            "originalPrice": {
+                              "type": "number",
+                              "example": 234.2
+                            },
+                            "originalTax": {
+                              "type": "number"
+                            },
+                            "originalFee": {
+                              "type": "number"
+                            },
+                            "originalAmount": {
+                              "type": "number"
+                            },
+                            "originalAmountNet": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "rate",
+                            "originalCurrency",
+                            "originalPrice",
+                            "originalTax",
+                            "originalFee",
+                            "originalAmount",
+                            "originalAmountNet"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "FX information if the activity was executed in a different currency than the portfolio currency - if null the activity was executed in the portfolio currency"
                     }
                   },
                   "required": [
@@ -2505,16 +3233,17 @@
                     "avgHoldingPeriod",
                     "buyAmountNet",
                     "realizedGainsNet",
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "id",
                     "holdingId",
                     "holdingAssetType",
                     "asset",
                     "amount",
-                    "amountNet"
+                    "amountNet",
+                    "fx"
                   ],
                   "additionalProperties": false,
                   "title": "Sell Activity"
@@ -2526,14 +3255,6 @@
                       "type": "string",
                       "const": "dividend"
                     },
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -2589,7 +3310,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -2645,6 +3366,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -2672,6 +3394,14 @@
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
                     },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -2686,6 +3416,8 @@
                         "crypto",
                         "commodity",
                         "custom",
+                        "insurance",
+                        "p2p",
                         "real_estate"
                       ]
                     },
@@ -2775,6 +3507,44 @@
                           "properties": {
                             "assetIdentifierType": {
                               "type": "string",
+                              "const": "insurance"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "Insurance"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
+                              "const": "p2p"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "P2P"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
                               "const": "commodity"
                             },
                             "name": {
@@ -2815,20 +3585,113 @@
                     },
                     "amountNet": {
                       "type": "number"
+                    },
+                    "fx": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "rate": {
+                              "type": "number",
+                              "example": 1.234
+                            },
+                            "originalCurrency": {
+                              "type": "string",
+                              "enum": [
+                                "ARS",
+                                "AUD",
+                                "BRL",
+                                "BWP",
+                                "CAD",
+                                "CHF",
+                                "CLP",
+                                "CNY",
+                                "CZK",
+                                "DKK",
+                                "EUR",
+                                "GBP",
+                                "GBX",
+                                "GEL",
+                                "HKD",
+                                "HUF",
+                                "IDR",
+                                "ILS",
+                                "INR",
+                                "ISK",
+                                "JPY",
+                                "KRW",
+                                "KZT",
+                                "MAD",
+                                "MXN",
+                                "MYR",
+                                "NOK",
+                                "NZD",
+                                "PEN",
+                                "PHP",
+                                "PLN",
+                                "RUB",
+                                "SAR",
+                                "SEK",
+                                "SGD",
+                                "THB",
+                                "TRY",
+                                "TWD",
+                                "USD",
+                                "USDC",
+                                "VND",
+                                "ZAR",
+                                "ZMW"
+                              ],
+                              "example": "USD"
+                            },
+                            "originalPrice": {
+                              "type": "number",
+                              "example": 234.2
+                            },
+                            "originalTax": {
+                              "type": "number"
+                            },
+                            "originalFee": {
+                              "type": "number"
+                            },
+                            "originalAmount": {
+                              "type": "number"
+                            },
+                            "originalAmountNet": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "rate",
+                            "originalCurrency",
+                            "originalPrice",
+                            "originalTax",
+                            "originalFee",
+                            "originalAmount",
+                            "originalAmountNet"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "FX information if the activity was executed in a different currency than the portfolio currency - if null the activity was executed in the portfolio currency"
                     }
                   },
                   "required": [
                     "type",
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "id",
                     "holdingId",
                     "holdingAssetType",
                     "asset",
                     "amount",
-                    "amountNet"
+                    "amountNet",
+                    "fx"
                   ],
                   "additionalProperties": false,
                   "title": "Dividend Activity"
@@ -2840,14 +3703,6 @@
                       "type": "string",
                       "const": "interest"
                     },
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -2903,7 +3758,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -2959,6 +3814,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -2986,6 +3842,14 @@
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
                     },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -3000,6 +3864,8 @@
                         "crypto",
                         "commodity",
                         "custom",
+                        "insurance",
+                        "p2p",
                         "real_estate"
                       ]
                     },
@@ -3089,6 +3955,44 @@
                           "properties": {
                             "assetIdentifierType": {
                               "type": "string",
+                              "const": "insurance"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "Insurance"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
+                              "const": "p2p"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "P2P"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
                               "const": "commodity"
                             },
                             "name": {
@@ -3129,20 +4033,113 @@
                     },
                     "amountNet": {
                       "type": "number"
+                    },
+                    "fx": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "rate": {
+                              "type": "number",
+                              "example": 1.234
+                            },
+                            "originalCurrency": {
+                              "type": "string",
+                              "enum": [
+                                "ARS",
+                                "AUD",
+                                "BRL",
+                                "BWP",
+                                "CAD",
+                                "CHF",
+                                "CLP",
+                                "CNY",
+                                "CZK",
+                                "DKK",
+                                "EUR",
+                                "GBP",
+                                "GBX",
+                                "GEL",
+                                "HKD",
+                                "HUF",
+                                "IDR",
+                                "ILS",
+                                "INR",
+                                "ISK",
+                                "JPY",
+                                "KRW",
+                                "KZT",
+                                "MAD",
+                                "MXN",
+                                "MYR",
+                                "NOK",
+                                "NZD",
+                                "PEN",
+                                "PHP",
+                                "PLN",
+                                "RUB",
+                                "SAR",
+                                "SEK",
+                                "SGD",
+                                "THB",
+                                "TRY",
+                                "TWD",
+                                "USD",
+                                "USDC",
+                                "VND",
+                                "ZAR",
+                                "ZMW"
+                              ],
+                              "example": "USD"
+                            },
+                            "originalPrice": {
+                              "type": "number",
+                              "example": 234.2
+                            },
+                            "originalTax": {
+                              "type": "number"
+                            },
+                            "originalFee": {
+                              "type": "number"
+                            },
+                            "originalAmount": {
+                              "type": "number"
+                            },
+                            "originalAmountNet": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "rate",
+                            "originalCurrency",
+                            "originalPrice",
+                            "originalTax",
+                            "originalFee",
+                            "originalAmount",
+                            "originalAmountNet"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "FX information if the activity was executed in a different currency than the portfolio currency - if null the activity was executed in the portfolio currency"
                     }
                   },
                   "required": [
                     "type",
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "id",
                     "holdingId",
                     "holdingAssetType",
                     "asset",
                     "amount",
-                    "amountNet"
+                    "amountNet",
+                    "fx"
                   ],
                   "additionalProperties": false,
                   "title": "Interest Activity"
@@ -3154,14 +4151,6 @@
                       "type": "string",
                       "const": "transfer_in"
                     },
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -3217,7 +4206,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -3273,6 +4262,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -3300,6 +4290,14 @@
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
                     },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -3314,6 +4312,8 @@
                         "crypto",
                         "commodity",
                         "custom",
+                        "insurance",
+                        "p2p",
                         "real_estate"
                       ]
                     },
@@ -3403,6 +4403,44 @@
                           "properties": {
                             "assetIdentifierType": {
                               "type": "string",
+                              "const": "insurance"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "Insurance"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
+                              "const": "p2p"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "P2P"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
                               "const": "commodity"
                             },
                             "name": {
@@ -3443,20 +4481,113 @@
                     },
                     "amountNet": {
                       "type": "number"
+                    },
+                    "fx": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "rate": {
+                              "type": "number",
+                              "example": 1.234
+                            },
+                            "originalCurrency": {
+                              "type": "string",
+                              "enum": [
+                                "ARS",
+                                "AUD",
+                                "BRL",
+                                "BWP",
+                                "CAD",
+                                "CHF",
+                                "CLP",
+                                "CNY",
+                                "CZK",
+                                "DKK",
+                                "EUR",
+                                "GBP",
+                                "GBX",
+                                "GEL",
+                                "HKD",
+                                "HUF",
+                                "IDR",
+                                "ILS",
+                                "INR",
+                                "ISK",
+                                "JPY",
+                                "KRW",
+                                "KZT",
+                                "MAD",
+                                "MXN",
+                                "MYR",
+                                "NOK",
+                                "NZD",
+                                "PEN",
+                                "PHP",
+                                "PLN",
+                                "RUB",
+                                "SAR",
+                                "SEK",
+                                "SGD",
+                                "THB",
+                                "TRY",
+                                "TWD",
+                                "USD",
+                                "USDC",
+                                "VND",
+                                "ZAR",
+                                "ZMW"
+                              ],
+                              "example": "USD"
+                            },
+                            "originalPrice": {
+                              "type": "number",
+                              "example": 234.2
+                            },
+                            "originalTax": {
+                              "type": "number"
+                            },
+                            "originalFee": {
+                              "type": "number"
+                            },
+                            "originalAmount": {
+                              "type": "number"
+                            },
+                            "originalAmountNet": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "rate",
+                            "originalCurrency",
+                            "originalPrice",
+                            "originalTax",
+                            "originalFee",
+                            "originalAmount",
+                            "originalAmountNet"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "FX information if the activity was executed in a different currency than the portfolio currency - if null the activity was executed in the portfolio currency"
                     }
                   },
                   "required": [
                     "type",
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "id",
                     "holdingId",
                     "holdingAssetType",
                     "asset",
                     "amount",
-                    "amountNet"
+                    "amountNet",
+                    "fx"
                   ],
                   "additionalProperties": false,
                   "title": "Transfer In Activity"
@@ -3480,14 +4611,6 @@
                     "realizedGainsNet": {
                       "type": "number"
                     },
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -3543,7 +4666,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -3599,6 +4722,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -3626,6 +4750,14 @@
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
                     },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -3640,6 +4772,8 @@
                         "crypto",
                         "commodity",
                         "custom",
+                        "insurance",
+                        "p2p",
                         "real_estate"
                       ]
                     },
@@ -3729,6 +4863,44 @@
                           "properties": {
                             "assetIdentifierType": {
                               "type": "string",
+                              "const": "insurance"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "Insurance"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
+                              "const": "p2p"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "P2P"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
                               "const": "commodity"
                             },
                             "name": {
@@ -3769,6 +4941,98 @@
                     },
                     "amountNet": {
                       "type": "number"
+                    },
+                    "fx": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "rate": {
+                              "type": "number",
+                              "example": 1.234
+                            },
+                            "originalCurrency": {
+                              "type": "string",
+                              "enum": [
+                                "ARS",
+                                "AUD",
+                                "BRL",
+                                "BWP",
+                                "CAD",
+                                "CHF",
+                                "CLP",
+                                "CNY",
+                                "CZK",
+                                "DKK",
+                                "EUR",
+                                "GBP",
+                                "GBX",
+                                "GEL",
+                                "HKD",
+                                "HUF",
+                                "IDR",
+                                "ILS",
+                                "INR",
+                                "ISK",
+                                "JPY",
+                                "KRW",
+                                "KZT",
+                                "MAD",
+                                "MXN",
+                                "MYR",
+                                "NOK",
+                                "NZD",
+                                "PEN",
+                                "PHP",
+                                "PLN",
+                                "RUB",
+                                "SAR",
+                                "SEK",
+                                "SGD",
+                                "THB",
+                                "TRY",
+                                "TWD",
+                                "USD",
+                                "USDC",
+                                "VND",
+                                "ZAR",
+                                "ZMW"
+                              ],
+                              "example": "USD"
+                            },
+                            "originalPrice": {
+                              "type": "number",
+                              "example": 234.2
+                            },
+                            "originalTax": {
+                              "type": "number"
+                            },
+                            "originalFee": {
+                              "type": "number"
+                            },
+                            "originalAmount": {
+                              "type": "number"
+                            },
+                            "originalAmountNet": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "rate",
+                            "originalCurrency",
+                            "originalPrice",
+                            "originalTax",
+                            "originalFee",
+                            "originalAmount",
+                            "originalAmountNet"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "FX information if the activity was executed in a different currency than the portfolio currency - if null the activity was executed in the portfolio currency"
                     }
                   },
                   "required": [
@@ -3777,16 +5041,17 @@
                     "avgHoldingPeriod",
                     "buyAmountNet",
                     "realizedGainsNet",
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "id",
                     "holdingId",
                     "holdingAssetType",
                     "asset",
                     "amount",
-                    "amountNet"
+                    "amountNet",
+                    "fx"
                   ],
                   "additionalProperties": false,
                   "title": "Transfer Out Activity"
@@ -3798,14 +5063,6 @@
                       "type": "string",
                       "const": "fees_taxes"
                     },
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -3861,7 +5118,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -3917,6 +5174,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -3944,6 +5202,14 @@
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
                     },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -3958,6 +5224,8 @@
                         "crypto",
                         "commodity",
                         "custom",
+                        "insurance",
+                        "p2p",
                         "real_estate"
                       ]
                     },
@@ -4047,6 +5315,44 @@
                           "properties": {
                             "assetIdentifierType": {
                               "type": "string",
+                              "const": "insurance"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "Insurance"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
+                              "const": "p2p"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "P2P"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
                               "const": "commodity"
                             },
                             "name": {
@@ -4087,20 +5393,113 @@
                     },
                     "amountNet": {
                       "type": "number"
+                    },
+                    "fx": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "rate": {
+                              "type": "number",
+                              "example": 1.234
+                            },
+                            "originalCurrency": {
+                              "type": "string",
+                              "enum": [
+                                "ARS",
+                                "AUD",
+                                "BRL",
+                                "BWP",
+                                "CAD",
+                                "CHF",
+                                "CLP",
+                                "CNY",
+                                "CZK",
+                                "DKK",
+                                "EUR",
+                                "GBP",
+                                "GBX",
+                                "GEL",
+                                "HKD",
+                                "HUF",
+                                "IDR",
+                                "ILS",
+                                "INR",
+                                "ISK",
+                                "JPY",
+                                "KRW",
+                                "KZT",
+                                "MAD",
+                                "MXN",
+                                "MYR",
+                                "NOK",
+                                "NZD",
+                                "PEN",
+                                "PHP",
+                                "PLN",
+                                "RUB",
+                                "SAR",
+                                "SEK",
+                                "SGD",
+                                "THB",
+                                "TRY",
+                                "TWD",
+                                "USD",
+                                "USDC",
+                                "VND",
+                                "ZAR",
+                                "ZMW"
+                              ],
+                              "example": "USD"
+                            },
+                            "originalPrice": {
+                              "type": "number",
+                              "example": 234.2
+                            },
+                            "originalTax": {
+                              "type": "number"
+                            },
+                            "originalFee": {
+                              "type": "number"
+                            },
+                            "originalAmount": {
+                              "type": "number"
+                            },
+                            "originalAmountNet": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "rate",
+                            "originalCurrency",
+                            "originalPrice",
+                            "originalTax",
+                            "originalFee",
+                            "originalAmount",
+                            "originalAmountNet"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "FX information if the activity was executed in a different currency than the portfolio currency - if null the activity was executed in the portfolio currency"
                     }
                   },
                   "required": [
                     "type",
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "id",
                     "holdingId",
                     "holdingAssetType",
                     "asset",
                     "amount",
-                    "amountNet"
+                    "amountNet",
+                    "fx"
                   ],
                   "additionalProperties": false,
                   "title": "Fees & Taxes Activity"
@@ -4112,14 +5511,6 @@
                       "type": "string",
                       "const": "deposit"
                     },
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -4175,7 +5566,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -4231,6 +5622,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -4258,6 +5650,14 @@
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
                     },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -4272,6 +5672,8 @@
                         "crypto",
                         "commodity",
                         "custom",
+                        "insurance",
+                        "p2p",
                         "real_estate"
                       ]
                     },
@@ -4361,6 +5763,44 @@
                           "properties": {
                             "assetIdentifierType": {
                               "type": "string",
+                              "const": "insurance"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "Insurance"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
+                              "const": "p2p"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "P2P"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
                               "const": "commodity"
                             },
                             "name": {
@@ -4401,23 +5841,116 @@
                     },
                     "amountNet": {
                       "type": "number"
+                    },
+                    "fx": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "rate": {
+                              "type": "number",
+                              "example": 1.234
+                            },
+                            "originalCurrency": {
+                              "type": "string",
+                              "enum": [
+                                "ARS",
+                                "AUD",
+                                "BRL",
+                                "BWP",
+                                "CAD",
+                                "CHF",
+                                "CLP",
+                                "CNY",
+                                "CZK",
+                                "DKK",
+                                "EUR",
+                                "GBP",
+                                "GBX",
+                                "GEL",
+                                "HKD",
+                                "HUF",
+                                "IDR",
+                                "ILS",
+                                "INR",
+                                "ISK",
+                                "JPY",
+                                "KRW",
+                                "KZT",
+                                "MAD",
+                                "MXN",
+                                "MYR",
+                                "NOK",
+                                "NZD",
+                                "PEN",
+                                "PHP",
+                                "PLN",
+                                "RUB",
+                                "SAR",
+                                "SEK",
+                                "SGD",
+                                "THB",
+                                "TRY",
+                                "TWD",
+                                "USD",
+                                "USDC",
+                                "VND",
+                                "ZAR",
+                                "ZMW"
+                              ],
+                              "example": "USD"
+                            },
+                            "originalPrice": {
+                              "type": "number",
+                              "example": 234.2
+                            },
+                            "originalTax": {
+                              "type": "number"
+                            },
+                            "originalFee": {
+                              "type": "number"
+                            },
+                            "originalAmount": {
+                              "type": "number"
+                            },
+                            "originalAmountNet": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "rate",
+                            "originalCurrency",
+                            "originalPrice",
+                            "originalTax",
+                            "originalFee",
+                            "originalAmount",
+                            "originalAmountNet"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "FX information if the activity was executed in a different currency than the portfolio currency - if null the activity was executed in the portfolio currency"
                     }
                   },
                   "required": [
                     "type",
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "id",
                     "holdingId",
                     "holdingAssetType",
                     "asset",
                     "amount",
-                    "amountNet"
+                    "amountNet",
+                    "fx"
                   ],
                   "additionalProperties": false,
-                  "title": "Cash Deposit Activity"
+                  "title": "Deposit Activity"
                 },
                 {
                   "type": "object",
@@ -4426,14 +5959,6 @@
                       "type": "string",
                       "const": "withdrawal"
                     },
-                    "shares": {
-                      "type": "number",
-                      "example": 10
-                    },
-                    "price": {
-                      "type": "number",
-                      "example": 234.2
-                    },
                     "tax": {
                       "example": 0,
                       "type": "number"
@@ -4489,7 +6014,7 @@
                         "ZAR",
                         "ZMW"
                       ],
-                      "description": "Currency of the provided `price`, `tax` and `fee` properties"
+                      "description": "Currency of the provided monetary properties (`amount`, `price`, `tax` and `fee`)"
                     },
                     "datetime": {
                       "type": "string",
@@ -4545,6 +6070,7 @@
                         "portfolio_performance",
                         "postbank",
                         "quirion",
+                        "saxo_bank",
                         "s_broker",
                         "scalable_capital",
                         "smartbroker",
@@ -4572,6 +6098,14 @@
                       "pattern": "^[A-Za-z0-9\\-_]+$",
                       "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker). \n\nIt also serves as an explicit deduplication key for activities. Two otherwise identical activities with different external ids will be stored as two separate activities, while two activities with the same externalId will be treated as the same activity and deduplicated accordingly."
                     },
+                    "shares": {
+                      "type": "number",
+                      "example": 10
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 234.2
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -4586,6 +6120,8 @@
                         "crypto",
                         "commodity",
                         "custom",
+                        "insurance",
+                        "p2p",
                         "real_estate"
                       ]
                     },
@@ -4675,6 +6211,44 @@
                           "properties": {
                             "assetIdentifierType": {
                               "type": "string",
+                              "const": "insurance"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "Insurance"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
+                              "const": "p2p"
+                            },
+                            "holding_id": {
+                              "type": "string",
+                              "example": "hld_698264d2cb0f0369b3892235"
+                            }
+                          },
+                          "required": [
+                            "assetIdentifierType",
+                            "holding_id"
+                          ],
+                          "additionalProperties": false,
+                          "title": "P2P"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "assetIdentifierType": {
+                              "type": "string",
                               "const": "commodity"
                             },
                             "name": {
@@ -4715,23 +6289,116 @@
                     },
                     "amountNet": {
                       "type": "number"
+                    },
+                    "fx": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "rate": {
+                              "type": "number",
+                              "example": 1.234
+                            },
+                            "originalCurrency": {
+                              "type": "string",
+                              "enum": [
+                                "ARS",
+                                "AUD",
+                                "BRL",
+                                "BWP",
+                                "CAD",
+                                "CHF",
+                                "CLP",
+                                "CNY",
+                                "CZK",
+                                "DKK",
+                                "EUR",
+                                "GBP",
+                                "GBX",
+                                "GEL",
+                                "HKD",
+                                "HUF",
+                                "IDR",
+                                "ILS",
+                                "INR",
+                                "ISK",
+                                "JPY",
+                                "KRW",
+                                "KZT",
+                                "MAD",
+                                "MXN",
+                                "MYR",
+                                "NOK",
+                                "NZD",
+                                "PEN",
+                                "PHP",
+                                "PLN",
+                                "RUB",
+                                "SAR",
+                                "SEK",
+                                "SGD",
+                                "THB",
+                                "TRY",
+                                "TWD",
+                                "USD",
+                                "USDC",
+                                "VND",
+                                "ZAR",
+                                "ZMW"
+                              ],
+                              "example": "USD"
+                            },
+                            "originalPrice": {
+                              "type": "number",
+                              "example": 234.2
+                            },
+                            "originalTax": {
+                              "type": "number"
+                            },
+                            "originalFee": {
+                              "type": "number"
+                            },
+                            "originalAmount": {
+                              "type": "number"
+                            },
+                            "originalAmountNet": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "rate",
+                            "originalCurrency",
+                            "originalPrice",
+                            "originalTax",
+                            "originalFee",
+                            "originalAmount",
+                            "originalAmountNet"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "FX information if the activity was executed in a different currency than the portfolio currency - if null the activity was executed in the portfolio currency"
                     }
                   },
                   "required": [
                     "type",
-                    "shares",
-                    "price",
                     "currency",
                     "datetime",
+                    "shares",
+                    "price",
                     "id",
                     "holdingId",
                     "holdingAssetType",
                     "asset",
                     "amount",
-                    "amountNet"
+                    "amountNet",
+                    "fx"
                   ],
                   "additionalProperties": false,
-                  "title": "Cash Withdrawal Activity"
+                  "title": "Withdrawal Activity"
                 }
               ]
             }
@@ -4827,6 +6494,60 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "subAccounts": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^\\w+::\\w+$",
+                            "description": "Identifier of a portfolio sub-account",
+                            "example": "67910d3879bf5f007acd4164::56910a3879bf5f007acd4539"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "isDefault": {
+                            "type": "boolean",
+                            "const": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "isDefault"
+                        ],
+                        "additionalProperties": false,
+                        "title": "Explicit SubAccount"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^\\w+::\\w+$",
+                            "description": "Identifier of a portfolio sub-account",
+                            "example": "67910d3879bf5f007acd4164::56910a3879bf5f007acd4539"
+                          },
+                          "isDefault": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "isDefault"
+                        ],
+                        "additionalProperties": false,
+                        "title": "Default SubAccount"
+                      }
+                    ]
+                  },
+                  "description": "Sub-accounts represent separate securities accounts that a broker manages within a single brokerage connection — for example, multiple depots at the same bank that are imported into one Parqet portfolio."
                 }
               },
               "required": [
@@ -4834,7 +6555,8 @@
                 "currency",
                 "name",
                 "createdAt",
-                "distinctBrokers"
+                "distinctBrokers",
+                "subAccounts"
               ],
               "additionalProperties": false
             }
@@ -5150,6 +6872,58 @@
           "name"
         ]
       },
+      "InsuranceHoldingCreationBodyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "imageData": {
+            "type": "string",
+            "format": "base64",
+            "contentEncoding": "base64",
+            "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+            "description": "Base64 encoded PNG image data (256x256, max 512KiB)"
+          },
+          "externalId": {
+            "type": "string",
+            "maxLength": 255,
+            "pattern": "^[A-Za-z0-9\\-_]+$",
+            "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker)."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "P2PHoldingCreationBodyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "imageData": {
+            "type": "string",
+            "format": "base64",
+            "contentEncoding": "base64",
+            "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+            "description": "Base64 encoded PNG image data (256x256, max 512KiB)"
+          },
+          "externalId": {
+            "type": "string",
+            "maxLength": 255,
+            "pattern": "^[A-Za-z0-9\\-_]+$",
+            "description": "This identifier can be used to create a logical connection between the data stored in parqet and the original data source of the user (e.g. the broker)."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
       "CashHoldingCreationBodyDto": {
         "type": "object",
         "properties": {
@@ -5218,6 +6992,8 @@
                 "crypto",
                 "commodity",
                 "custom",
+                "insurance",
+                "p2p",
                 "real_estate"
               ]
             }
@@ -5449,6 +7225,34 @@
                       "properties": {
                         "type": {
                           "type": "string",
+                          "const": "insurance"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ],
+                      "additionalProperties": false,
+                      "title": "Insurance"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "p2p"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ],
+                      "additionalProperties": false,
+                      "title": "P2P"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
                           "const": "real_estate"
                         }
                       },
@@ -5464,6 +7268,60 @@
                   "type": "string",
                   "maxLength": 255,
                   "pattern": "^[A-Za-z0-9\\-_]+$"
+                },
+                "subAccount": {
+                  "type": "string",
+                  "pattern": "^\\w+::\\w+$",
+                  "description": "Identifier of a portfolio sub-account",
+                  "example": "67910d3879bf5f007acd4164::56910a3879bf5f007acd4539"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "ARS",
+                    "AUD",
+                    "BRL",
+                    "BWP",
+                    "CAD",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "CZK",
+                    "DKK",
+                    "EUR",
+                    "GBP",
+                    "GBX",
+                    "GEL",
+                    "HKD",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "ISK",
+                    "JPY",
+                    "KRW",
+                    "KZT",
+                    "MAD",
+                    "MXN",
+                    "MYR",
+                    "NOK",
+                    "NZD",
+                    "PEN",
+                    "PHP",
+                    "PLN",
+                    "RUB",
+                    "SAR",
+                    "SEK",
+                    "SGD",
+                    "THB",
+                    "TRY",
+                    "TWD",
+                    "USD",
+                    "USDC",
+                    "VND",
+                    "ZAR",
+                    "ZMW"
+                  ]
                 }
               },
               "required": [
@@ -5471,7 +7329,9 @@
                 "activityCount",
                 "logo",
                 "nickname",
-                "asset"
+                "asset",
+                "subAccount",
+                "currency"
               ],
               "additionalProperties": false
             }
@@ -5606,6 +7466,22 @@
               "ZAR",
               "ZMW"
             ]
+          },
+          "filter": {
+            "default": {},
+            "type": "object",
+            "properties": {
+              "subAccountIds": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^\\w+::\\w+$",
+                  "description": "Identifier of a portfolio sub-account",
+                  "example": "67910d3879bf5f007acd4164::56910a3879bf5f007acd4539"
+                }
+              }
+            }
           }
         },
         "required": [
@@ -6013,6 +7889,34 @@
                       "properties": {
                         "type": {
                           "type": "string",
+                          "const": "insurance"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ],
+                      "additionalProperties": false,
+                      "title": "Insurance"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "p2p"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ],
+                      "additionalProperties": false,
+                      "title": "P2P"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
                           "const": "real_estate"
                         }
                       },
@@ -6028,6 +7932,60 @@
                   "type": "string",
                   "maxLength": 255,
                   "pattern": "^[A-Za-z0-9\\-_]+$"
+                },
+                "subAccount": {
+                  "type": "string",
+                  "pattern": "^\\w+::\\w+$",
+                  "description": "Identifier of a portfolio sub-account",
+                  "example": "67910d3879bf5f007acd4164::56910a3879bf5f007acd4539"
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "ARS",
+                    "AUD",
+                    "BRL",
+                    "BWP",
+                    "CAD",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "CZK",
+                    "DKK",
+                    "EUR",
+                    "GBP",
+                    "GBX",
+                    "GEL",
+                    "HKD",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "ISK",
+                    "JPY",
+                    "KRW",
+                    "KZT",
+                    "MAD",
+                    "MXN",
+                    "MYR",
+                    "NOK",
+                    "NZD",
+                    "PEN",
+                    "PHP",
+                    "PLN",
+                    "RUB",
+                    "SAR",
+                    "SEK",
+                    "SGD",
+                    "THB",
+                    "TRY",
+                    "TWD",
+                    "USD",
+                    "USDC",
+                    "VND",
+                    "ZAR",
+                    "ZMW"
+                  ]
                 },
                 "startQuote": {
                   "type": "object",
@@ -6421,6 +8379,8 @@
                 "logo",
                 "nickname",
                 "asset",
+                "subAccount",
+                "currency",
                 "startQuote",
                 "quote",
                 "earliestActivityDate",
