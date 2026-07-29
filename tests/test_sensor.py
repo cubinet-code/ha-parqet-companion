@@ -20,6 +20,7 @@ from custom_components.parqet.const import (
 )
 from custom_components.parqet.sensor import (
     AGGREGATE_SENSORS,
+    ALL_SENSORS,
     ParqetAggregateSensor,
     _aggregate_value,
     _combined_top_holdings,
@@ -27,7 +28,7 @@ from custom_components.parqet.sensor import (
     _resolve_path,
 )
 
-from .conftest import MOCK_PERFORMANCE
+from .conftest import MOCK_CURRENCY, MOCK_PERFORMANCE
 
 
 def _account_source(
@@ -338,3 +339,42 @@ class TestAggregateSensors:
         assert sensor.native_unit_of_measurement == "EUR"
         assert not sensor.available
         assert sensor.native_value is None
+
+
+class TestHistoryStatistics:
+    """Guard the state classes that long-term statistics depend on (#8)."""
+
+    def test_monetary_sensors_produce_min_mean_max_statistics(self) -> None:
+        """Money sensors must stay MEASUREMENT so history has something to plot.
+
+        device_class=MONETARY is deliberately not set: Home Assistant only
+        allows state_class=TOTAL with it, and TOTAL compiles a "sum" statistic
+        only. Portfolio figures are levels, not accumulating meter readings, so
+        a sum is meaningless and no history chart can be drawn.
+        """
+        from homeassistant.components.sensor import SensorStateClass
+        from homeassistant.components.sensor.recorder import DEFAULT_STATISTICS
+
+        monetary = [d for d in ALL_SENSORS if d.is_monetary]
+        assert monetary, "expected monetary sensor descriptions"
+
+        for description in monetary:
+            assert description.device_class is None, description.key
+            assert description.state_class is SensorStateClass.MEASUREMENT, (
+                description.key
+            )
+            assert DEFAULT_STATISTICS[description.state_class] == {
+                "mean",
+                "min",
+                "max",
+            }, description.key
+
+    async def test_monetary_sensors_carry_portfolio_currency(
+        self, hass: HomeAssistant, init_integration: MockConfigEntry
+    ) -> None:
+        """Dropping the device class must not lose the currency unit."""
+        state = hass.states.get("sensor.test_portfolio_total_value")
+        assert state is not None
+        assert state.attributes["unit_of_measurement"] == MOCK_CURRENCY
+        assert state.attributes["state_class"] == "measurement"
+        assert "device_class" not in state.attributes

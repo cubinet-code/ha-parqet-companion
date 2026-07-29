@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from homeassistant.components.sensor import (
-    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
@@ -47,21 +46,22 @@ class ParqetSensorEntityDescription(SensorEntityDescription):
     value_path: str
     # Whether this is a percentage (already in %) or monetary value.
     is_percentage: bool = False
+    # Whether the native unit is the portfolio currency.
+    #
+    # These deliberately do NOT set device_class=MONETARY. Home Assistant only
+    # permits state_class=TOTAL with that device class, and TOTAL compiles a
+    # "sum" statistic only — no mean/min/max. Portfolio figures are levels
+    # sampled every poll, not accumulating meter readings, so a sum is
+    # meaningless and there is nothing for a history chart to draw (#8).
+    # Keeping MEASUREMENT gives correct min/mean/max long-term statistics; the
+    # currency still shows because it remains the unit of measurement.
+    is_monetary: bool = False
     # Whether this sensor is enabled by default.
     entity_registry_enabled_default: bool = True
     # Optional callable for derived values that don't map to a data path.
     custom_value_fn: Callable[[dict[str, Any]], float | None] | None = field(
         default=None, repr=False
     )
-
-    def __post_init__(self) -> None:
-        """Set state_class based on device_class if not explicitly provided."""
-        # HA requires MONETARY sensors to use TOTAL, not MEASUREMENT.
-        if (
-            self.device_class == SensorDeviceClass.MONETARY
-            and self.state_class == SensorStateClass.MEASUREMENT
-        ):
-            object.__setattr__(self, "state_class", SensorStateClass.TOTAL)
 
 
 def _resolve_path(data: dict[str, Any], path: str) -> Any:
@@ -83,7 +83,7 @@ CORE_SENSORS: list[ParqetSensorEntityDescription] = [
         key="total_value",
         translation_key="total_value",
         icon="mdi:cash-multiple",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.valuation.atIntervalEnd",
@@ -112,7 +112,7 @@ CORE_SENSORS: list[ParqetSensorEntityDescription] = [
         key="unrealized_gain",
         translation_key="unrealized_gain",
         icon="mdi:trending-up",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.unrealizedGains.inInterval.gainGross",
@@ -121,7 +121,7 @@ CORE_SENSORS: list[ParqetSensorEntityDescription] = [
         key="realized_gain",
         translation_key="realized_gain",
         icon="mdi:cash-check",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.realizedGains.inInterval.gainGross",
@@ -130,7 +130,7 @@ CORE_SENSORS: list[ParqetSensorEntityDescription] = [
         key="dividends",
         translation_key="dividends",
         icon="mdi:cash-refund",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.dividends.inInterval.gainGross",
@@ -139,7 +139,7 @@ CORE_SENSORS: list[ParqetSensorEntityDescription] = [
         key="fees",
         translation_key="fees",
         icon="mdi:credit-card-outline",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.fees.inInterval.fees",
@@ -148,7 +148,7 @@ CORE_SENSORS: list[ParqetSensorEntityDescription] = [
         key="taxes",
         translation_key="taxes",
         icon="mdi:receipt-text",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.taxes.inInterval.taxes",
@@ -162,7 +162,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         key="valuation_start",
         translation_key="valuation_start",
         icon="mdi:cash-clock",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.valuation.atIntervalStart",
@@ -172,7 +172,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         key="unrealized_gain_net",
         translation_key="unrealized_gain_net",
         icon="mdi:trending-up",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.unrealizedGains.inInterval.gainNet",
@@ -204,7 +204,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         key="realized_gain_net",
         translation_key="realized_gain_net",
         icon="mdi:cash-check",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.realizedGains.inInterval.gainNet",
@@ -236,7 +236,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         key="dividends_net",
         translation_key="dividends_net",
         icon="mdi:cash-refund",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.dividends.inInterval.gainNet",
@@ -246,7 +246,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         key="dividends_taxes",
         translation_key="dividends_taxes",
         icon="mdi:receipt-text",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.dividends.inInterval.taxes",
@@ -256,7 +256,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         key="dividends_fees",
         translation_key="dividends_fees",
         icon="mdi:credit-card-outline",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="performance.dividends.inInterval.fees",
@@ -276,7 +276,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         key="net_allocation",
         translation_key="net_allocation",
         icon="mdi:scale-balance",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="netAllocations.net",
@@ -286,7 +286,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         key="positive_allocation",
         translation_key="positive_allocation",
         icon="mdi:arrow-up-bold-circle-outline",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="netAllocations.positive.total",
@@ -296,7 +296,7 @@ DETAILED_SENSORS: list[ParqetSensorEntityDescription] = [
         key="negative_allocation",
         translation_key="negative_allocation",
         icon="mdi:arrow-down-bold-circle-outline",
-        device_class=SensorDeviceClass.MONETARY,
+        is_monetary=True,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_path="netAllocations.negative.total",
@@ -584,7 +584,7 @@ class ParqetAggregateSensor(SensorEntity):
     @property
     def native_unit_of_measurement(self) -> str | None:
         """Use source portfolio metadata instead of a hardcoded currency."""
-        if self.entity_description.device_class == SensorDeviceClass.MONETARY:
+        if self.entity_description.is_monetary:
             return self._configured_currency
         return self.entity_description.native_unit_of_measurement
 
@@ -648,7 +648,7 @@ class ParqetSensor(ParqetEntity, SensorEntity):
             description.entity_registry_enabled_default
         )
 
-        if description.device_class == SensorDeviceClass.MONETARY:
+        if description.is_monetary:
             self._attr_native_unit_of_measurement = currency
 
     @property
