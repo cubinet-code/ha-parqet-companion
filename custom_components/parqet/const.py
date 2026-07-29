@@ -36,6 +36,12 @@ CONF_CURRENCY = "currency"
 CONF_USER_ID = "user_id"
 CONF_PORTFOLIO_IDS = "portfolio_ids"
 CONF_PORTFOLIO_META = "portfolio_meta"
+CONF_ENTRY_TYPE = "entry_type"
+CONF_SOURCE_ENTRY_IDS = "source_entry_ids"
+ENTRY_TYPE_ACCOUNT = "account"
+ENTRY_TYPE_COMBINED = "combined"
+COMBINED_UNIQUE_ID = "combined_accounts"
+SIGNAL_ACCOUNTS_UPDATED = f"{DOMAIN}_accounts_updated"
 
 # Options
 CONF_INTERVAL = "interval"

@@ -9,8 +9,25 @@
  * entity registry access.
  */
 
-import type { Hass, DiscoveredPortfolio, HassEntity } from './types';
+import type { Hass, DiscoveredPortfolio, HassEntity, HassDeviceRegistryEntry } from './types';
 import { sensorKeyFromUniqueId } from './const';
+
+export interface PortfolioDiscoveryResult {
+  portfolios: DiscoveredPortfolio[];
+  /** True when the configured device_id still exists and produced portfolios. */
+  matchedConfiguredDevice: boolean;
+}
+
+export function discoverPortfoliosForCard(
+  hass: Hass,
+  deviceId?: string,
+): PortfolioDiscoveryResult {
+  const portfolios = discoverPortfolios(hass, deviceId);
+  return {
+    portfolios,
+    matchedConfiguredDevice: Boolean(deviceId && portfolios.length > 0),
+  };
+}
 
 /**
  * Discover all Parqet portfolios from HA state, language-independently.
@@ -31,8 +48,27 @@ export function discoverPortfolios(
   return _discoverViaStateScan(hass, deviceId);
 }
 
+function isCombinedDevice(device?: HassDeviceRegistryEntry): boolean {
+  return !!device?.identifiers?.some(
+    ([domain, value]) => domain === 'parqet' && value === 'combined_accounts',
+  );
+}
+
+/** Return the explicit HA-owned Combined portfolio, when configured. */
+export function discoverCombinedPortfolio(hass: Hass): DiscoveredPortfolio | null {
+  const combinedDevice = Object.values(hass.devices ?? {}).find(isCombinedDevice);
+  if (!combinedDevice) return null;
+  return discoverPortfolios(hass, combinedDevice.id)[0] ?? null;
+}
+
 function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfolio[] {
-  // Group parqet entities by device_id
+  const configuredDevice = deviceId ? hass.devices?.[deviceId] : undefined;
+  const configuredDeviceIsCombined = isCombinedDevice(configuredDevice);
+
+  // Group parqet entities by device_id. If the card was explicitly configured
+  // for the virtual "Parqet Combined" device, keep that device and route card
+  // requests through the integration's combined WebSocket handlers. The
+  // combined sensors expose source_entry_ids instead of a single entry_id.
   const deviceGroups = new Map<string, Array<{ entity_id: string; unique_id?: string }>>();
 
   for (const entry of Object.values(hass.entities!)) {
@@ -53,6 +89,7 @@ function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfoli
 
   for (const [devId, entries] of deviceGroups) {
     const device = hass.devices?.[devId];
+    if (!configuredDeviceIsCombined && isCombinedDevice(device)) continue;
     const name = device?.name ?? devId;
 
     // Device identifier is (parqet, portfolio_id) — this is the v2 mapping
@@ -74,9 +111,14 @@ function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfoli
       const state = hass.states[entity_id];
       if (!state) continue;
 
-      // Get entry_id from state attributes (set by our integration)
+      // Get entry_id from state attributes. Combined sensors expose the source
+      // entry IDs as an array; any loaded entry can authorize the combined WS
+      // request because the backend aggregates across loaded Parqet entries.
       if (!entryId && state.attributes?.['entry_id']) {
         entryId = state.attributes['entry_id'] as string;
+      }
+      if (!entryId && Array.isArray(state.attributes?.['source_entry_ids'])) {
+        entryId = state.attributes['source_entry_ids'][0] as string;
       }
       if (!portfolioId && state.attributes?.['portfolio_id']) {
         portfolioId = state.attributes['portfolio_id'] as string;

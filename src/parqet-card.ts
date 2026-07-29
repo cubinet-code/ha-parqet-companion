@@ -8,10 +8,9 @@ import { registerElement } from './diagnostics-frontend';
 import { LitElement, html, css, PropertyValues } from 'lit';
 import { property, state } from 'lit/decorators.js';
 
-import type { Hass, ParqetCardConfig, ViewType, DiscoveredPortfolio, PortfolioPerformance, Holding, HassEntity } from './types';
+import type { Hass, ParqetCardConfig, ViewType, DiscoveredPortfolio, PortfolioPerformance, Holding } from './types';
 import type { IntervalValue } from './const';
-import { DOMAIN } from './const';
-import { discoverPortfolios } from './discovery';
+import { discoverCombinedPortfolio, discoverPortfoliosForCard } from './discovery';
 import { buildPerformanceMsg, isRateLimitError } from './utils';
 
 import './components/loading-spinner';
@@ -248,21 +247,41 @@ export class ParqetCompanionCard extends LitElement {
     this._lastEntities = this.hass.entities;
 
     const deviceId = this._config?.device_id;
-    const discovered = discoverPortfolios(this.hass, deviceId);
+    const discovery = discoverPortfoliosForCard(this.hass, deviceId);
+    const discovered = discovery.portfolios;
 
     // Sort before comparing to avoid false positives from iteration order changes
-    const key = (ps: DiscoveredPortfolio[]) => [...ps.map((p) => p.entryId)].sort().join(',');
+    const key = (ps: DiscoveredPortfolio[]) => [...ps.map((p) => `${p.entryId}:${p.portfolioId}`)].sort().join(',');
     if (key(discovered) !== key(this._portfolios)) {
       this._portfolios = discovered;
-      // Default: "All" (-1) when multiple portfolios with no device filter;
-      // first portfolio (0) when single or device-specific.
-      if (discovered.length <= 1 || this._config?.device_id) {
+      // Default: "All" (-1) when multiple portfolios with no active device filter;
+      // first portfolio (0) when single or a valid device-specific card.
+      if (
+        discovered.length <= 1
+        || discovery.matchedConfiguredDevice
+        || !this._canAggregateAll(discovered)
+      ) {
         this._selectedIndex = 0;
       } else {
         this._selectedIndex = -1;
       }
       void this._loadData();
     }
+  }
+
+  private _canAggregateAll(portfolios = this._portfolios): boolean {
+    if (portfolios.length < 2) return false;
+    if (new Set(portfolios.map((portfolio) => portfolio.entryId)).size === 1) {
+      return true;
+    }
+    return discoverCombinedPortfolio(this.hass) !== null;
+  }
+
+  private _aggregateOptionLabel(portfolios = this._portfolios): string {
+    if (new Set(portfolios.map((portfolio) => portfolio.entryId)).size > 1) {
+      return discoverCombinedPortfolio(this.hass)?.name ?? 'Parqet Combined';
+    }
+    return 'All Portfolios';
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -280,7 +299,9 @@ export class ParqetCompanionCard extends LitElement {
     }
 
     const portfolio = this._getActivePortfolio()!;
-    const views: ViewType[] = ['performance', 'holdings', 'activities'];
+    const views: ViewType[] = portfolio.portfolioId === 'combined_accounts'
+      ? ['performance', 'holdings']
+      : ['performance', 'holdings', 'activities'];
 
     return html`
       <ha-card>
@@ -288,7 +309,9 @@ export class ParqetCompanionCard extends LitElement {
           <div class="card-header">
             ${this._portfolios.length > 1 ? html`
               <select class="portfolio-select" @change=${this._onPortfolioChange}>
-                <option value="-1" ?selected=${this._selectedIndex === -1}>All Portfolios</option>
+                ${this._canAggregateAll() ? html`
+                  <option value="-1" ?selected=${this._selectedIndex === -1}>${this._aggregateOptionLabel()}</option>
+                ` : ''}
                 ${this._portfolios.map((p, i) => html`
                   <option value=${i} ?selected=${i === this._selectedIndex}>${p.name}</option>
                 `)}
@@ -322,7 +345,10 @@ export class ParqetCompanionCard extends LitElement {
   }
 
   private _renderView(portfolio: DiscoveredPortfolio) {
-    if (this._activeView === 'performance') {
+    if (
+      this._activeView === 'performance'
+      || (portfolio.portfolioId === 'combined_accounts' && this._activeView === 'activities')
+    ) {
       return html`
         <parqet-performance-view
           .hass=${this.hass}
@@ -376,9 +402,7 @@ export class ParqetCompanionCard extends LitElement {
     this._rateLimited = false;
 
     try {
-      const result = (await this.hass.connection.sendMessagePromise(
-        buildPerformanceMsg(portfolio, this._interval),
-      )) as { performance: PortfolioPerformance; holdings: Holding[] };
+      const result = await this._fetchPerformanceAndHoldings(portfolio);
       if (gen !== this._fetchGen) return;
       this._perfData = result.performance;
       this._holdingsData = (result.holdings || []).filter(
@@ -399,6 +423,31 @@ export class ParqetCompanionCard extends LitElement {
     }
   }
 
+  private async _fetchPerformanceAndHoldings(
+    portfolio: DiscoveredPortfolio,
+  ): Promise<{ performance: PortfolioPerformance; holdings: Holding[] }> {
+    if (!portfolio._portfolios?.length) {
+      return (await this.hass.connection.sendMessagePromise(
+        buildPerformanceMsg(portfolio, this._interval),
+      )) as { performance: PortfolioPerformance; holdings: Holding[] };
+    }
+
+    const routes = portfolio._portfolios;
+    const entryIds = new Set(routes.map((route) => route.entryId));
+    let requestPortfolio = portfolio;
+    if (entryIds.size > 1) {
+      const combined = discoverCombinedPortfolio(this.hass);
+      if (!combined) {
+        throw new Error('Parqet Combined entry is required for multi-account totals');
+      }
+      requestPortfolio = combined;
+    }
+
+    return (await this.hass.connection.sendMessagePromise(
+      buildPerformanceMsg(requestPortfolio, this._interval),
+    )) as { performance: PortfolioPerformance; holdings: Holding[] };
+  }
+
   _onIntervalChange(e: CustomEvent) {
     this._interval = e.detail.interval as IntervalValue;
     void this._loadData();
@@ -408,6 +457,16 @@ export class ParqetCompanionCard extends LitElement {
     if (this._cachedProxySource === this._portfolios && this._cachedProxy) {
       return this._cachedProxy;
     }
+    const entryIds = new Set(this._portfolios.map((portfolio) => portfolio.entryId));
+    if (entryIds.size > 1) {
+      const combined = discoverCombinedPortfolio(this.hass);
+      if (combined) {
+        this._cachedProxy = combined;
+        this._cachedProxySource = this._portfolios;
+        return this._cachedProxy;
+      }
+    }
+
     this._cachedProxy = {
       entryId: this._portfolios[0]?.entryId ?? '__all__',
       portfolioId: '__all__',

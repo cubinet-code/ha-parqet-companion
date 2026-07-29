@@ -11,6 +11,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.parqet.const import (
+    CONF_CURRENCY,
+    CONF_ENTRY_TYPE,
+    CONF_PORTFOLIO_IDS,
+    CONF_PORTFOLIO_META,
+    CONF_SOURCE_ENTRY_IDS,
+    DOMAIN,
+    ENTRY_TYPE_COMBINED,
+)
+
 from .conftest import (
     MOCK_PORTFOLIO_ID,
     MOCK_PORTFOLIO_NAME,
@@ -19,6 +29,33 @@ from .conftest import (
 )
 
 MANIFEST_PATH = Path("custom_components/parqet/manifest.json")
+
+
+def _add_account_entry(
+    hass: HomeAssistant,
+    *,
+    title: str,
+    user_id: str,
+    portfolio_id: str,
+    currency: str,
+) -> MockConfigEntry:
+    """Add an account entry with portfolio metadata for Combined flow tests."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title=title,
+        unique_id=user_id,
+        version=2,
+        minor_version=1,
+        data={
+            "user_id": user_id,
+            CONF_PORTFOLIO_IDS: [portfolio_id],
+            CONF_PORTFOLIO_META: {
+                portfolio_id: {"name": title, "currency": currency}
+            },
+        },
+    )
+    entry.add_to_hass(hass)
+    return entry
 
 
 @pytest.fixture(autouse=True)
@@ -30,6 +67,139 @@ def _clear_manifest_deps():
     MANIFEST_PATH.write_text(json.dumps(data))
     yield
     MANIFEST_PATH.write_text(original)
+
+
+async def test_combined_flow_selects_sources_and_persists_currency(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Combined is a separate entry with stable selected sources and currency."""
+    first = _add_account_entry(
+        hass,
+        title="Scalable",
+        user_id="user_a",
+        portfolio_id="portfolio_a",
+        currency="EUR",
+    )
+    second = _add_account_entry(
+        hass,
+        title="Trade Republic",
+        user_id="user_b",
+        portfolio_id="portfolio_b",
+        currency="EUR",
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "user"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={CONF_ENTRY_TYPE: ENTRY_TYPE_COMBINED},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "combined"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={CONF_SOURCE_ENTRY_IDS: [first.entry_id, second.entry_id]},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Parqet Combined"
+    assert result["data"] == {
+        CONF_ENTRY_TYPE: ENTRY_TYPE_COMBINED,
+        CONF_SOURCE_ENTRY_IDS: [first.entry_id, second.entry_id],
+        CONF_CURRENCY: "EUR",
+    }
+
+
+async def test_combined_flow_rejects_mixed_currencies(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """A Combined entry must never establish mixed-currency statistics."""
+    first = _add_account_entry(
+        hass,
+        title="EUR Account",
+        user_id="user_eur",
+        portfolio_id="portfolio_eur",
+        currency="EUR",
+    )
+    second = _add_account_entry(
+        hass,
+        title="USD Account",
+        user_id="user_usd",
+        portfolio_id="portfolio_usd",
+        currency="USD",
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={CONF_ENTRY_TYPE: ENTRY_TYPE_COMBINED},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={CONF_SOURCE_ENTRY_IDS: [first.entry_id, second.entry_id]},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "combined"
+    assert result["errors"] == {"base": "mixed_currency"}
+
+
+async def test_combined_options_update_selected_sources(
+    hass: HomeAssistant,
+) -> None:
+    """Combined options persist source ownership and its fixed currency."""
+    first = _add_account_entry(
+        hass,
+        title="First",
+        user_id="first",
+        portfolio_id="p1",
+        currency="EUR",
+    )
+    second = _add_account_entry(
+        hass,
+        title="Second",
+        user_id="second",
+        portfolio_id="p2",
+        currency="EUR",
+    )
+    combined = MockConfigEntry(
+        domain=DOMAIN,
+        title="Parqet Combined",
+        unique_id="combined_accounts",
+        data={
+            CONF_ENTRY_TYPE: ENTRY_TYPE_COMBINED,
+            CONF_SOURCE_ENTRY_IDS: [first.entry_id, second.entry_id],
+            CONF_CURRENCY: "EUR",
+        },
+        version=2,
+        minor_version=1,
+    )
+    combined.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(combined.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "combined"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={CONF_SOURCE_ENTRY_IDS: [second.entry_id, first.entry_id]},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert combined.options[CONF_SOURCE_ENTRY_IDS] == [second.entry_id, first.entry_id]
+    assert combined.options[CONF_CURRENCY] == "EUR"
+
+    reconfigure = await combined.start_reconfigure_flow(hass)
+    assert reconfigure["type"] is FlowResultType.ABORT
+    assert reconfigure["reason"] == "combined_reconfigure_via_options"
 
 
 async def test_reauth_flow_shows_confirm(
@@ -62,6 +232,146 @@ async def test_reauth_confirm_proceeds(
         FlowResultType.EXTERNAL_STEP,
         FlowResultType.ABORT,
     )
+
+
+async def _finish_user_oauth_flow(
+    hass: HomeAssistant,
+    user_info: dict,
+    portfolios: list[dict],
+) -> dict:
+    """Start a user flow and inject the OAuth completion payload."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    flow = hass.config_entries.flow._progress.get(result["flow_id"])
+    assert flow is not None
+
+    with patch(
+        "custom_components.parqet.config_flow.aiohttp_client.async_get_clientsession",
+    ), patch(
+        "custom_components.parqet.config_flow.ParqetApiClient",
+    ) as mock_api_cls:
+        mock_api = mock_api_cls.return_value
+        mock_api.async_get_user = AsyncMock(return_value=user_info)
+        mock_api.async_list_portfolios = AsyncMock(return_value=portfolios)
+        return await flow.async_oauth_create_entry(
+            {
+                "auth_implementation": "parqet",
+                "token": {
+                    "access_token": "new_access",
+                    "refresh_token": "new_refresh",
+                    "expires_in": 3600,
+                },
+            }
+        )
+
+
+async def test_first_account_keeps_historic_portfolio_title(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """The first configured account keeps the existing single-account title."""
+    result = await _finish_user_oauth_flow(
+        hass,
+        MOCK_USER_INFO,
+        [
+            {
+                "id": MOCK_PORTFOLIO_ID,
+                "name": MOCK_PORTFOLIO_NAME,
+                "currency": "EUR",
+            }
+        ],
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == MOCK_PORTFOLIO_NAME
+    assert result["data"]["user_id"] == MOCK_USER_INFO["userId"]
+
+
+async def test_second_parqet_account_can_be_added_and_gets_disambiguated_title(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """A different Parqet user is a separate account entry, not a duplicate."""
+    existing = MockConfigEntry(
+        domain=DOMAIN,
+        title="Main Portfolio",
+        unique_id="first_user",
+        version=2,
+        minor_version=1,
+        data={
+            "auth_implementation": "parqet",
+            "token": {"access_token": "old"},
+            "user_id": "first_user",
+            "portfolio_ids": ["first_portfolio"],
+            "portfolio_meta": {
+                "first_portfolio": {"name": "Main Portfolio", "currency": "EUR"}
+            },
+        },
+    )
+    existing.add_to_hass(hass)
+
+    second_user = {**MOCK_USER_INFO, "userId": "second_user_123456"}
+    result = await _finish_user_oauth_flow(
+        hass,
+        second_user,
+        [
+            {
+                "id": "second_portfolio",
+                "name": "Main Portfolio",
+                "currency": "EUR",
+            }
+        ],
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Main Portfolio (account 123456)"
+    assert result["data"]["user_id"] == "second_user_123456"
+    assert result["data"]["portfolio_ids"] == ["second_portfolio"]
+
+
+async def test_second_account_title_prefers_human_readable_user_label(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """If Parqet exposes an email/name, use it instead of an opaque id suffix."""
+    existing = MockConfigEntry(
+        domain=DOMAIN,
+        title="Parqet",
+        unique_id="first_user",
+        version=2,
+        data={"user_id": "first_user"},
+    )
+    existing.add_to_hass(hass)
+
+    result = await _finish_user_oauth_flow(
+        hass,
+        {**MOCK_USER_INFO, "userId": "second_user", "email": "jane@example.test"},
+        [
+            {
+                "id": "second_a",
+                "name": "Broker A",
+                "currency": "EUR",
+            },
+            {
+                "id": "second_b",
+                "name": "Broker B",
+                "currency": "EUR",
+            },
+        ],
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "pick_portfolio"
+
+    flow = hass.config_entries.flow._progress.get(result["flow_id"])
+    assert flow is not None
+    submission = await flow.async_step_pick_portfolio(
+        {"portfolio_ids": ["second_a", "second_b"]}
+    )
+
+    assert submission["type"] is FlowResultType.CREATE_ENTRY
+    assert submission["title"] == "Parqet (2 portfolios) (jane@example.test)"
 
 
 async def test_reauth_updates_token_in_place(

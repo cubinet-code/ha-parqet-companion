@@ -86,6 +86,38 @@ function makePortfolio(): DiscoveredPortfolio {
   };
 }
 
+function makeDiscoveryHass(): Hass {
+  return {
+    states: {
+      'sensor.scalable_total_value': {
+        entity_id: 'sensor.scalable_total_value',
+        state: '100',
+        attributes: { entry_id: 'entry_s', friendly_name: 'Scalable Gesamtwert' },
+        last_changed: '2026-01-01T00:00:00Z',
+        last_updated: '2026-01-01T00:00:00Z',
+      },
+      'sensor.trade_total_value': {
+        entity_id: 'sensor.trade_total_value',
+        state: '200',
+        attributes: { entry_id: 'entry_t', friendly_name: 'Trade Republic Gesamtwert' },
+        last_changed: '2026-01-01T00:00:00Z',
+        last_updated: '2026-01-01T00:00:00Z',
+      },
+    },
+    devices: {
+      device_s: { id: 'device_s', name: 'Scalable', identifiers: [['parqet', 'p_s']] },
+      device_t: { id: 'device_t', name: 'Trade Republic', identifiers: [['parqet', 'p_t']] },
+    },
+    entities: {
+      'sensor.scalable_total_value': { entity_id: 'sensor.scalable_total_value', device_id: 'device_s', platform: 'parqet', unique_id: 'p_s_total_value' },
+      'sensor.trade_total_value': { entity_id: 'sensor.trade_total_value', device_id: 'device_t', platform: 'parqet', unique_id: 'p_t_total_value' },
+    },
+    connection: {
+      sendMessagePromise: vi.fn().mockResolvedValue(NO_SNAPSHOT_RESPONSE),
+    },
+  };
+}
+
 describe('ParqetSnapshotCard', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let SnapshotCard: any;
@@ -124,6 +156,17 @@ describe('ParqetSnapshotCard', () => {
     expect(card._data.snapshot_date).toBe('2026-04-08');
     expect(card._data.holdings).toHaveLength(1);
     expect(card._data.total_daily_pl).toBe(500.0);
+  });
+
+  it('keeps a stale configured device empty', () => {
+    const hass = makeDiscoveryHass();
+    const card = new SnapshotCard();
+    card.hass = hass;
+    card.setConfig({ type: 'custom:parqet-snapshot-card', device_id: 'deleted_combined_device_id' });
+
+    card._discoverPortfolio();
+
+    expect(card._portfolio).toBeNull();
   });
 
   it('handles missing snapshot gracefully', async () => {

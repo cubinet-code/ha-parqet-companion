@@ -42,16 +42,16 @@ export interface PortfolioPerformance {
     inInterval: {
       gainGross: number;
       gainNet: number;
-      returnGross: number;
-      returnNet: number;
+      returnGross?: number;
+      returnNet?: number;
     };
   };
   realizedGains: {
     inInterval: {
       gainGross: number;
       gainNet: number;
-      returnGross: number;
-      returnNet: number;
+      returnGross?: number;
+      returnNet?: number;
     };
   };
   dividends: {

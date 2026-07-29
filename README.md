@@ -1,6 +1,6 @@
 [![GitHub Release](https://img.shields.io/github/v/release/cubinet-code/ha-parqet-companion?style=flat-square)](https://github.com/cubinet-code/ha-parqet-companion/releases)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=flat-square)](https://hacs.xyz)
-[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.8%2B-blue.svg?style=flat-square)](https://www.home-assistant.io/)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.3%2B-blue.svg?style=flat-square)](https://www.home-assistant.io/)
 [![License: MIT](https://img.shields.io/github/license/cubinet-code/ha-parqet-companion?style=flat-square)](https://github.com/cubinet-code/ha-parqet-companion/blob/main/LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/cubinet-code/ha-parqet-companion/validate.yml?style=flat-square&label=CI)](https://github.com/cubinet-code/ha-parqet-companion/actions)
 
@@ -16,7 +16,9 @@ A Home Assistant integration for [Parqet](https://www.parqet.com) — the portfo
 
 - **OAuth2 + PKCE authentication** — secure, one-click setup via Parqet Connect
 - **22 sensors per portfolio** — total value, XIRR, TTWROR, unrealized/realized gains, dividends, fees, taxes, allocations, and more
+- **Combined Parqet sensors** — additive totals across explicitly selected same-currency Parqet accounts/portfolios
 - **Multi-portfolio support** — track multiple portfolios from a single Parqet account
+- **Multi-account support** — add additional Parqet accounts as separate integration entries
 - **Lovelace companion card** with three views:
   - **Performance** — KPI grid, interval selector (1D to Max), stacked breakdown chart
   - **Holdings** — donut allocation chart, sortable table with logos, expandable detail rows, interval-aware P&L
@@ -31,7 +33,7 @@ A Home Assistant integration for [Parqet](https://www.parqet.com) — the portfo
 
 ## Prerequisites
 
-- **Home Assistant** 2024.8 or newer
+- **Home Assistant** 2025.3 or newer
 - A **[Parqet](https://www.parqet.com) account** with at least one portfolio
 - Parqet Connect OAuth access (included with all Parqet accounts)
 
@@ -77,6 +79,23 @@ Or manually:
 3. Sign in with your Parqet account (OAuth2 — no credentials stored in HA)
 4. Select which portfolios to track (all are selected by default)
 5. The Parqet account is added as a single integration entry. Each selected portfolio becomes its own device with sensors and a calendar entity.
+
+### Multiple Parqet accounts
+
+You can add more than one Parqet account. Repeat the setup flow for each account:
+
+1. Go to **Settings** > **Devices & Services** > **Add Integration**
+2. Search for **Parqet Companion**
+3. Sign in with the next Parqet account
+4. Select the portfolios to track for that account
+
+Each Parqet account becomes its own integration entry, and each selected portfolio becomes a device under that entry. If you add a second account with similar portfolio names, the new entry title includes a short account label so the entries are easier to tell apart.
+
+After adding at least two account entries, add Parqet Companion once more and choose **Parqet Combined**. Select the source accounts to aggregate. The selected portfolios must use the same currency; otherwise no Combined entry is created. The Combined entry owns its own device and sensors, while account entries continue to own only their portfolio devices.
+
+The Combined sensors aggregate additive values from the selected accounts, such as total value, gains, dividends, fees, taxes, allocations, and active holdings count. Percentage KPIs such as XIRR and TTWROR are intentionally not combined because they cannot be mathematically summed across separate OAuth accounts without full cash-flow data. If a selected account is unloaded, unavailable, or later reports a different currency, Combined fails closed instead of publishing a partial or mislabeled total.
+
+When upgrading from an earlier multi-account test build, creating the Combined entry migrates existing `combined_accounts_*` entity-registry records and the Combined device to the new owner. Existing entity IDs are retained so dashboards, automations, and history references continue to work.
 
 ### Upgrading from v0.3.x
 

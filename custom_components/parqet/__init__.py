@@ -12,15 +12,18 @@ import logging
 from dataclasses import dataclass, field
 
 import aiohttp
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import (
     ConfigEntryAuthFailed,
     ConfigEntryError,
     ConfigEntryNotReady,
 )
 from homeassistant.helpers import aiohttp_client, config_entry_oauth2_flow
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .api import (
     ParqetApiClient,
@@ -30,6 +33,8 @@ from .api import (
     is_token_endpoint_reauth_error,
 )
 from .const import (
+    COMBINED_UNIQUE_ID,
+    CONF_ENTRY_TYPE,
     CONF_INTERVAL,
     CONF_PORTFOLIO_META,
     CONF_SCAN_INTERVAL,
@@ -42,6 +47,8 @@ from .const import (
     DEFAULT_SNAPSHOT_MINUTE,
     DEFAULT_SNAPSHOT_WEEKDAYS_ONLY,
     DOMAIN,
+    ENTRY_TYPE_COMBINED,
+    SIGNAL_ACCOUNTS_UPDATED,
 )
 from .coordinator import ParqetDataUpdateCoordinator
 from .frontend import async_register_frontend
@@ -56,6 +63,7 @@ from .websocket_api import async_register_websocket_api
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR]
+COMBINED_PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 
 @dataclass
@@ -72,7 +80,49 @@ class ParqetAccountRuntime:
     snapshot_managers: dict[str, SnapshotManager] = field(default_factory=dict)
 
 
-type ParqetConfigEntry = ConfigEntry[ParqetAccountRuntime]
+@dataclass
+class ParqetCombinedRuntime:
+    """Runtime marker for the HA-owned Combined config entry."""
+
+
+type ParqetRuntime = ParqetAccountRuntime | ParqetCombinedRuntime
+type ParqetConfigEntry = ConfigEntry[ParqetRuntime]
+
+
+def _migrate_combined_registry_ownership(
+    hass: HomeAssistant,
+    entry: ParqetConfigEntry,
+) -> None:
+    """Move legacy aggregate registry records to the explicit Combined entry."""
+    entity_registry = er.async_get(hass)
+    unique_id_prefix = f"{COMBINED_UNIQUE_ID}_"
+    for registry_entry in list(entity_registry.entities.values()):
+        if (
+            registry_entry.platform == DOMAIN
+            and registry_entry.unique_id.startswith(unique_id_prefix)
+            and registry_entry.config_entry_id != entry.entry_id
+        ):
+            entity_registry.async_update_entity(
+                registry_entry.entity_id,
+                config_entry_id=entry.entry_id,
+            )
+
+    device_registry = dr.async_get(hass)
+    device = device_registry.async_get_device(
+        identifiers={(DOMAIN, COMBINED_UNIQUE_ID)}
+    )
+    if device is None:
+        return
+    if entry.entry_id not in device.config_entries:
+        device_registry.async_update_device(
+            device.id,
+            add_config_entry_id=entry.entry_id,
+        )
+    for old_entry_id in device.config_entries - {entry.entry_id}:
+        device_registry.async_update_device(
+            device.id,
+            remove_config_entry_id=old_entry_id,
+        )
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -99,7 +149,14 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 async def async_setup_entry(
     hass: HomeAssistant, entry: ParqetConfigEntry
 ) -> bool:
-    """Set up Parqet from an account-scoped config entry."""
+    """Set up Parqet from an account or Combined config entry."""
+    if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_COMBINED:
+        _migrate_combined_registry_ownership(hass, entry)
+        entry.runtime_data = ParqetCombinedRuntime()
+        await hass.config_entries.async_forward_entry_setups(entry, COMBINED_PLATFORMS)
+        entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+        return True
+
     try:
         implementation = (
             await config_entry_oauth2_flow.async_get_config_entry_implementation(
@@ -213,6 +270,12 @@ async def async_setup_entry(
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    @callback
+    def _notify_combined_when_loaded() -> None:
+        if entry.state is ConfigEntryState.LOADED:
+            async_dispatcher_send(hass, SIGNAL_ACCOUNTS_UPDATED)
+
+    entry.async_on_unload(entry.async_on_state_change(_notify_combined_when_loaded))
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True
@@ -229,9 +292,15 @@ async def async_unload_entry(
     hass: HomeAssistant, entry: ParqetConfigEntry
 ) -> bool:
     """Unload a Parqet config entry."""
+    is_combined = entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_COMBINED
     runtime = entry.runtime_data
-    if runtime is not None:
+    if isinstance(runtime, ParqetAccountRuntime):
         for snapshot_mgr in runtime.snapshot_managers.values():
             await snapshot_mgr.async_teardown()
 
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    platforms = COMBINED_PLATFORMS if is_combined else PLATFORMS
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, platforms)
+    if unload_ok and not is_combined:
+        async_dispatcher_send(hass, SIGNAL_ACCOUNTS_UPDATED)
+
+    return unload_ok

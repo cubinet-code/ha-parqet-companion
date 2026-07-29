@@ -23,8 +23,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: pip install pytest pytest-asyncio pytest-homeassistant-custom-component
+          python-version: "3.13"
+      - name: Install test dependencies at the declared Home Assistant floor
+        run: |
+          HA_VERSION=$(python -c 'import json; print(json.load(open("hacs.json"))["homeassistant"])')
+          pip install pytest pytest-asyncio pytest-homeassistant-custom-component "homeassistant==$HA_VERSION"
       - run: python -m pytest tests/ -v
 
   build:
