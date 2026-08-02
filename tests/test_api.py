@@ -2,19 +2,27 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+import time
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from custom_components.parqet.api import (
+    DEFAULT_RATE_LIMIT_COOLDOWN,
+    MAX_RATE_LIMIT_COOLDOWN,
     ParqetAccessDeniedError,
     ParqetApiClient,
     ParqetApiError,
     ParqetAuthError,
     ParqetConnectionError,
+    ParqetRateLimitError,
+    RateLimitState,
+    _handle_response,
 )
+from custom_components.parqet.rate_limit import async_get_rate_limit_state
 
 from .conftest import token_endpoint_response_error
 
@@ -156,18 +164,25 @@ class TestParqetApiClient:
         with pytest.raises(ParqetAuthError, match=f"{status}"):
             await client.async_get_performance(["p1"])
 
-    async def test_429_response_at_token_endpoint_is_connection_error(
+    async def test_429_response_at_token_endpoint_is_rate_limit_error(
         self, mock_session: AsyncMock
     ) -> None:
-        """429 on /oauth2/token is transient — the user can't fix a rate
-        limit by re-authenticating, so it must NOT route to reauth.
+        """429 on /oauth2/token is a rate limit, not a credential problem.
+
+        It must NOT route to reauth — re-authenticating cannot clear a rate
+        limit — and it must surface as ParqetRateLimitError so `retry_after`
+        and the card's rate-limit banner work for the token path too.
         """
         mock_session.request.side_effect = token_endpoint_response_error(429)
 
-        client = ParqetApiClient(mock_session, "token")
+        state = RateLimitState()
+        client = ParqetApiClient(mock_session, "token", rate_limit=state)
 
-        with pytest.raises(ParqetConnectionError):
+        with pytest.raises(ParqetRateLimitError):
             await client.async_get_performance(["p1"])
+
+        assert not issubclass(ParqetRateLimitError, ParqetAuthError)
+        assert state.remaining() > 0
 
     async def test_5xx_response_at_token_endpoint_is_connection_error(
         self, mock_session: AsyncMock
@@ -270,3 +285,109 @@ class TestParqetApiClient:
         assert params["activityType"] == ["buy", "sell"]
         assert params["limit"] == "50"
         assert params["cursor"] == "abc123"
+
+
+class TestRateLimitGate:
+    """The client must stop sending while a 429 penalty is outstanding."""
+
+    async def test_a_real_429_arms_the_shared_pause(self) -> None:
+        """A live 429 must arm the pause, not merely be logged and re-raised."""
+        resp = MagicMock(status=429, headers={})
+        resp.read = AsyncMock(
+            return_value=b'{"message": "Try again in 300 seconds."}'
+        )
+        ctx = MagicMock()
+        ctx.__aenter__ = AsyncMock(return_value=resp)
+        ctx.__aexit__ = AsyncMock(return_value=False)
+        session = MagicMock()
+        session.request.return_value = ctx
+
+        state = RateLimitState()
+        client = ParqetApiClient(session, access_token="tok", rate_limit=state)
+        assert state.remaining() == 0
+
+        with pytest.raises(ParqetRateLimitError):
+            await client.async_get_performance(["p1"])
+
+        assert 290 < state.remaining() <= 300
+
+        # A replacement client, as HA builds on the next setup retry, is paused
+        # before it reaches the network.
+        session.request.reset_mock()
+        replacement = ParqetApiClient(session, access_token="tok", rate_limit=state)
+        with pytest.raises(ParqetRateLimitError):
+            await replacement.async_get_performance(["p1"])
+        session.request.assert_not_called()
+
+    async def test_paused_client_makes_no_network_call(self) -> None:
+        """While paused, requests must fail locally with no socket traffic."""
+        session = MagicMock()
+        session.request.side_effect = AssertionError("must not reach the network")
+        state = RateLimitState()
+        state.arm(120)
+        client = ParqetApiClient(session, access_token="tok", rate_limit=state)
+
+        with (
+            patch.object(client, "_get_access_token", AsyncMock(return_value="t")),
+            pytest.raises(ParqetRateLimitError) as err,
+        ):
+            await client.async_get_performance(["p1"])
+
+        session.request.assert_not_called()
+        assert 0 < err.value.retry_after <= 120
+
+    def test_pause_expires(self) -> None:
+        """Once the window passes, requests are allowed through again."""
+        state = RateLimitState(until=time.monotonic() - 1)
+        assert state.remaining() == 0
+
+    def test_missing_duration_falls_back_to_cooldown(self) -> None:
+        """A 429 with no stated delay must still pause, not resume at once."""
+        state = RateLimitState()
+        assert state.arm(0) == DEFAULT_RATE_LIMIT_COOLDOWN
+        assert state.remaining() > 0
+
+    def test_absurd_duration_is_capped(self) -> None:
+        """A hostile Retry-After must not brick the client indefinitely."""
+        state = RateLimitState()
+        assert state.arm(999999999) == MAX_RATE_LIMIT_COOLDOWN
+
+    def test_arm_never_shortens_an_existing_pause(self) -> None:
+        """A later, shorter 429 must not let us resume early."""
+        state = RateLimitState()
+        state.arm(600)
+        before = state.remaining()
+        state.arm(5)
+        assert state.remaining() >= before - 1
+
+    def test_shared_state_is_per_installation(self, hass: HomeAssistant) -> None:
+        """Every client for the installation observes the same pause."""
+        first = async_get_rate_limit_state(hass)
+        first.arm(300)
+        assert async_get_rate_limit_state(hass) is first
+        assert async_get_rate_limit_state(hass).remaining() > 0
+
+
+class TestRetryAfterParsing:
+    """Retry-After must be read from either source without exploding."""
+
+    @pytest.mark.parametrize(
+        ("header", "body", "expected"),
+        [
+            ("30", b'{"message": "Try again in 438 seconds."}', 438),
+            ("600", b'{"message": "Try again in 438 seconds."}', 600),
+            (None, b'{"message": "Try again in 438 seconds."}', 438),
+            ("\u00b2", b"{}", 0),
+            ("Wed, 21 Oct 2026 07:28:00 GMT", b"{}", 0),
+            (None, b"not json", 0),
+            (None, b'{"message": 438}', 0),
+            (None, b"{}", 0),
+        ],
+    )
+    def test_parsing(self, header, body, expected) -> None:
+        """Malformed values degrade to 0 rather than raising."""
+        headers = {"Retry-After": header} if header is not None else {}
+        resp = MagicMock(status=429, headers=headers)
+        with pytest.raises(ParqetRateLimitError) as err:
+            _handle_response(resp, body)
+        assert err.value.retry_after == expected

@@ -566,7 +566,7 @@ function t(t,e,i,o){var r,s=arguments.length,a=s<3?e:null===o?o=Object.getOwnPro
         `}
 
         ${this._rateLimited?W`
-          <div class="rate-limit" role="alert">API rate limit reached — data will refresh automatically</div>
+          <div class="rate-limit" role="alert">API rate limit reached — wait a few minutes before retrying; reloading now makes it worse</div>
         `:""}
 
         <div class="tabs" role="tablist">

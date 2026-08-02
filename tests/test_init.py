@@ -455,3 +455,18 @@ async def test_setup_generic_client_error_raises_not_ready(
 
     refreshed = hass.config_entries.async_get_entry(mock_config_entry.entry_id)
     assert refreshed.state is ConfigEntryState.SETUP_RETRY
+
+
+async def test_setup_uses_the_installation_wide_rate_limit_state(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """Setup must build the client with the shared pause, not a private one.
+
+    HA rebuilds the client on every setup retry, so a per-instance deadline is
+    discarded on exactly the retry path it exists to stop.
+    """
+    from custom_components.parqet.api import RateLimitState
+    from custom_components.parqet.rate_limit import RATE_LIMIT_STATE_KEY
+
+    assert isinstance(hass.data.get(RATE_LIMIT_STATE_KEY), RateLimitState)

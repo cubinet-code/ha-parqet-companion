@@ -6,6 +6,9 @@ import asyncio
 import json
 import logging
 import re
+import time
+from dataclasses import dataclass
+from math import ceil
 from typing import TYPE_CHECKING, Any, TypeGuard
 
 import aiohttp
@@ -17,6 +20,44 @@ if TYPE_CHECKING:
     from homeassistant.helpers.config_entry_oauth2_flow import OAuth2Session
 
 _LOGGER = logging.getLogger(__name__)
+
+# Used when Parqet returns 429 without saying how long to wait. Long enough to
+# break a retry loop, short enough that recovery is not needlessly delayed when
+# the real penalty was brief.
+DEFAULT_RATE_LIMIT_COOLDOWN = 60
+
+# Ceiling on a self-imposed pause. Protects against a malformed or hostile
+# Retry-After (e.g. 999999999) permanently bricking the client.
+MAX_RATE_LIMIT_COOLDOWN = 900
+
+
+@dataclass
+class RateLimitState:
+    """A 429 penalty deadline shared by every client for an installation.
+
+    Deliberately *not* per-client. Home Assistant builds a fresh
+    ParqetApiClient on each `async_setup_entry`, and retries setup on
+    ConfigEntryNotReady, so instance state is discarded on exactly the retry
+    path the pause exists to stop.
+    """
+
+    until: float = 0.0
+
+    def remaining(self) -> int:
+        """Seconds left on the pause, 0 if none."""
+        return max(0, ceil(self.until - time.monotonic()))
+
+    def arm(self, retry_after: int) -> int:
+        """Start or extend the pause; returns the seconds now remaining.
+
+        Returns the *effective* remaining time, not the requested delay — a
+        later, shorter 429 must not make the log claim the pause got shorter.
+        """
+        seconds = min(
+            retry_after or DEFAULT_RATE_LIMIT_COOLDOWN, MAX_RATE_LIMIT_COOLDOWN
+        )
+        self.until = max(self.until, time.monotonic() + seconds)
+        return self.remaining()
 
 
 class ParqetApiError(Exception):
@@ -61,11 +102,26 @@ class ParqetApiClient:
         session: aiohttp.ClientSession,
         access_token: str | None = None,
         oauth_session: OAuth2Session | None = None,
+        rate_limit: RateLimitState | None = None,
     ) -> None:
-        """Initialize the API client."""
+        """Initialize the API client.
+
+        `rate_limit` should be the installation-wide state so a 429 pauses
+        every client, including ones built by later setup retries. A private
+        state is used when none is supplied, which suits one-shot use.
+        """
         self._session = session
         self._access_token = access_token
         self._oauth_session = oauth_session
+        self._rate_limit = rate_limit or RateLimitState()
+
+    def _pause(self, retry_after: int, source: str) -> None:
+        """Arm the shared pause and say so once, from either 429 path."""
+        _LOGGER.warning(
+            "Parqet rate limit hit (%s); pausing all requests for %ss",
+            source,
+            self._rate_limit.arm(retry_after),
+        )
 
     async def _get_access_token(self) -> str:
         """Get a valid access token, refreshing if needed."""
@@ -83,6 +139,16 @@ class ParqetApiClient:
         params: dict[str, Any] | None = None,
     ) -> Any:
         """Make an authenticated request to the Parqet API."""
+        # Refuse locally while a 429 penalty is outstanding. Without this a
+        # rate-limited setup is retried by HA at 5, 10, 20, 40, 80, 80... s,
+        # spending `1 + portfolios` requests per attempt and never recovering
+        # inside the window. Every caller already handles ParqetRateLimitError.
+        if (remaining := self._rate_limit.remaining()) > 0:
+            _LOGGER.debug(
+                "Skipping %s %s — rate limited for another %ss", method, path, remaining
+            )
+            raise ParqetRateLimitError(remaining)
+
         url = f"{API_BASE_URL}{path}"
         try:
             async with asyncio.timeout(30):
@@ -109,9 +175,36 @@ class ParqetApiClient:
             raise ParqetAuthError(
                 f"Token refresh failed: {err}"
             ) from err
+        except ParqetRateLimitError as err:
+            # Remember the penalty so sibling coordinators, later setup
+            # retries and the config flow all stop spending requests until it
+            # expires.
+            self._pause(err.retry_after, "API")
+            raise
         except ParqetApiError:
             raise
         except aiohttp.ClientError as err:
+            # Token refresh is itself a request to Parqet, so a 429 from it has
+            # to arm the pause too — otherwise it keeps hammering
+            # /oauth2/token throughout the penalty. Confirm the origin via
+            # `_failing_url` rather than the status alone, so a 429 from
+            # anywhere else cannot pause the whole installation.
+            failing_url = _failing_url(err)
+            if (
+                getattr(err, "status", None) == 429
+                and failing_url
+                and failing_url.endswith("/oauth2/token")
+            ):
+                # Token refresh is itself a request to Parqet, so surface it as
+                # the same rate-limit error a resource call would raise. That
+                # keeps `retry_after` and the card's rate-limit banner working
+                # for this path, and it still never routes to reauth — a rate
+                # limit is not something re-authenticating fixes.
+                retry_after = _retry_after_seconds(
+                    (getattr(err, "headers", None) or {}).get("Retry-After")
+                )
+                self._pause(retry_after, "token refresh")
+                raise ParqetRateLimitError(retry_after) from err
             # `aiohttp.ClientError` may originate from the OAuth token endpoint
             # via `OAuth2Session.async_ensure_token_valid()` rather than the
             # resource call this method is making. When it does, the failing
@@ -129,7 +222,6 @@ class ParqetApiClient:
                     f"Token refresh rejected by Parqet "
                     f"({err.status}); reauth required"
                 ) from err
-            failing_url = _failing_url(err)
             if failing_url and failing_url.endswith("/oauth2/token"):
                 raise ParqetConnectionError(
                     f"Token refresh failed before {method} {path}: {err}"
@@ -231,6 +323,33 @@ def is_token_endpoint_reauth_error(
     return bool(failing_url and failing_url.endswith("/oauth2/token"))
 
 
+def _retry_after_seconds(value: str | None) -> int:
+    """Parse a Retry-After header into whole seconds, 0 if unusable.
+
+    Only the delta-seconds form is understood. The HTTP-date form is legal but
+    Parqet has never been seen to send it, and guessing a clock skew is worse
+    than falling back to the default cooldown.
+    """
+    if not value:
+        return 0
+    try:
+        return max(0, int(value.strip()))
+    except ValueError:
+        return 0
+
+
+def _retry_after_from_body(body: bytes) -> int:
+    """Parse "Try again in 438 seconds." out of a 429 body, 0 if absent."""
+    try:
+        message = json.loads(body).get("message")
+    except (ValueError, AttributeError):
+        return 0
+    if not isinstance(message, str):
+        return 0
+    match = re.search(r"(\d+)\s*seconds", message)
+    return int(match.group(1)) if match else 0
+
+
 def _handle_response(resp: aiohttp.ClientResponse, body: bytes) -> Any:
     """Check response status and return parsed JSON."""
     if resp.status == 401:
@@ -243,17 +362,15 @@ def _handle_response(resp: aiohttp.ClientResponse, body: bytes) -> Any:
             f"access revoked on Parqet"
         )
     if resp.status == 429:
-        retry_after = 0
-        try:
-            data = json.loads(body)
-            msg = data.get("message", "")
-            # Parse "Try again in 438 seconds." from the message.
-            match = re.search(r"(\d+)\s*seconds", msg)
-            if match:
-                retry_after = int(match.group(1))
-        except (json.JSONDecodeError, ValueError):
-            pass
-        raise ParqetRateLimitError(retry_after)
+        # Parqet states the delay in the JSON body; the header is the documented
+        # convention and costs nothing to honour. Take the longer of the two so
+        # neither source under-reports and we resume early.
+        raise ParqetRateLimitError(
+            max(
+                _retry_after_seconds(resp.headers.get("Retry-After")),
+                _retry_after_from_body(body),
+            )
+        )
     if resp.status >= 500:
         raise ParqetConnectionError(
             f"Server error ({resp.status})"

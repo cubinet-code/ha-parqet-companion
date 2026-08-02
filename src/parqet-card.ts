@@ -322,7 +322,7 @@ export class ParqetCompanionCard extends LitElement {
         ` : ''}
 
         ${this._rateLimited ? html`
-          <div class="rate-limit" role="alert">API rate limit reached — data will refresh automatically</div>
+          <div class="rate-limit" role="alert">API rate limit reached — wait a few minutes before retrying; reloading now makes it worse</div>
         ` : ''}
 
         <div class="tabs" role="tablist">

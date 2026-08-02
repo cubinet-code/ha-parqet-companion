@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
@@ -26,6 +27,7 @@ from .const import (
     DEFAULT_INTERVAL,
     DOMAIN,
     ENTRY_TYPE_COMBINED,
+    INTERVALS,
 )
 from .coordinator import ParqetDataUpdateCoordinator
 
@@ -268,6 +270,36 @@ def aggregate_performance_payloads(payloads: list[dict[str, Any]]) -> dict[str, 
     return {"performance": performance, "holdings": holdings}
 
 
+PERFORMANCE_CACHE_TTL = 60.0
+
+
+async def _async_fetch_performance(
+    runtime: ParqetAccountRuntime,
+    portfolio_ids: list[str],
+    interval: str,
+) -> dict[str, Any]:
+    """Fetch `/performance` for one account, serving recent repeats from cache.
+
+    `/performance` was fetched live for every card render, every open tab and
+    every Combined view, none of which was throttled. Parqet's rate limits are
+    undocumented with multi-minute penalties, so collapsing identical repeats
+    inside a short window is worth a little staleness — sensor state still
+    comes from the coordinators, not from here.
+    """
+    key = (tuple(sorted(portfolio_ids)), interval)
+    now = time.monotonic()
+
+    cached = runtime.performance_cache.get(key)
+    if cached is not None:
+        stored_at, payload = cached
+        if now - stored_at <= PERFORMANCE_CACHE_TTL:
+            return payload
+
+    data = await runtime.api.async_get_performance(portfolio_ids, interval)
+    runtime.performance_cache[key] = (now, data)
+    return data
+
+
 async def _async_get_combined_performance(
     hass: HomeAssistant,
     interval: str,
@@ -276,10 +308,12 @@ async def _async_get_combined_performance(
     """Fetch and aggregate performance for the explicitly selected accounts."""
     runtimes = _combined_source_runtimes(hass, combined_entry_id)
     # One round-trip per account; each account has its own OAuth session, so
-    # there is no shared token lock to serialise on.
+    # there is no shared token lock to serialise on. Going through the per
+    # account cache means a Combined card and a per-account card at the same
+    # interval share one request instead of issuing two.
     payloads = await asyncio.gather(
         *(
-            runtime.api.async_get_performance(list(runtime.coordinators), interval)
+            _async_fetch_performance(runtime, list(runtime.coordinators), interval)
             for runtime in runtimes
         )
     )
@@ -365,7 +399,10 @@ async def ws_get_activities(
         vol.Required("entry_id"): str,
         vol.Optional("portfolio_id"): str,
         vol.Optional("portfolio_ids"): [str],
-        vol.Optional("interval", default=DEFAULT_INTERVAL): str,
+        # Bounded rather than a free string: every value the card can send is
+        # in INTERVALS, and an unvalidated interval is both an unbounded cache
+        # keyspace and an unbounded number of upstream requests.
+        vol.Optional("interval", default=DEFAULT_INTERVAL): vol.In(INTERVALS),
     }
 )
 @websocket_api.async_response
@@ -380,6 +417,15 @@ async def ws_get_performance(
     if the account only has one portfolio).
     Aggregated: pass `entry_id` + `portfolio_ids` (list).
     """
+    await _async_get_performance(hass, connection, msg)
+
+
+async def _async_get_performance(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Serve performance data (inner logic, mirrors snapshot_ws)."""
     if msg.get("portfolio_id") == COMBINED_UNIQUE_ID:
         try:
             data = await _async_get_combined_performance(
@@ -429,8 +475,8 @@ async def ws_get_performance(
         return
 
     try:
-        data = await runtime.api.async_get_performance(
-            requested_ids, msg["interval"]
+        data = await _async_fetch_performance(
+            runtime, requested_ids, msg["interval"]
         )
     except ParqetRateLimitError as err:
         _send_rate_limit_error(connection, msg, err)

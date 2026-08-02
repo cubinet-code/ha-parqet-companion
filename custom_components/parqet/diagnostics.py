@@ -8,6 +8,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
 from . import ParqetAccountRuntime, ParqetConfigEntry
+from .rate_limit import async_get_rate_limit_state
 
 TO_REDACT_CONFIG = {"token"}
 TO_REDACT_DATA = {"userId", "installationId"}
@@ -37,5 +38,8 @@ async def async_get_config_entry_diagnostics(
     return {
         "config_entry_data": async_redact_data(dict(entry.data), TO_REDACT_CONFIG),
         "config_entry_options": dict(entry.options),
+        # A self-imposed pause makes every sensor look stale for minutes with
+        # nothing in the UI to explain it, so surface it where users look.
+        "rate_limited_for_seconds": async_get_rate_limit_state(hass).remaining(),
         "portfolios": portfolios,
     }

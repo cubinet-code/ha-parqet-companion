@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from typing import Any
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
@@ -55,6 +56,7 @@ from .frontend import async_register_frontend
 from .migration import async_migrate_entry as async_migrate_entry
 from .oauth import create_parqet_oauth_implementation
 from .portfolio_sync import async_reconcile_portfolios
+from .rate_limit import async_get_rate_limit_state
 from .services import async_register_services
 from .snapshot import SnapshotManager
 from .snapshot_ws import async_register_snapshot_ws
@@ -78,6 +80,13 @@ class ParqetAccountRuntime:
     api: ParqetApiClient
     coordinators: dict[str, ParqetDataUpdateCoordinator] = field(default_factory=dict)
     snapshot_managers: dict[str, SnapshotManager] = field(default_factory=dict)
+    # On-demand `/performance` responses keyed by (portfolio ids, interval).
+    # Lives on the runtime so HA's own lifecycle invalidates it: the runtime is
+    # discarded on unload and reload, and a Combined request reuses each
+    # source's entry here rather than needing a second, global cache.
+    performance_cache: dict[
+        tuple[tuple[str, ...], str], tuple[float, dict[str, Any]]
+    ] = field(default_factory=dict)
 
 
 @dataclass
@@ -191,7 +200,11 @@ async def async_setup_entry(
         raise ConfigEntryNotReady(f"Failed to refresh token: {err}") from err
 
     session = aiohttp_client.async_get_clientsession(hass)
-    api = ParqetApiClient(session, oauth_session=oauth_session)
+    api = ParqetApiClient(
+        session,
+        oauth_session=oauth_session,
+        rate_limit=async_get_rate_limit_state(hass),
+    )
 
     # Must run before coordinator construction so we don't build coordinators
     # for portfolios that are about to be pruned.

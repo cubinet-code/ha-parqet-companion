@@ -63,6 +63,7 @@ from .const import (
     SCOPES,
 )
 from .oauth import create_parqet_oauth_implementation
+from .rate_limit import async_get_rate_limit_state
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -249,7 +250,11 @@ class ParqetOAuth2FlowHandler(
         access_token = token.get("access_token", "")
 
         session = aiohttp_client.async_get_clientsession(self.hass)
-        api = ParqetApiClient(session, access_token)
+        api = ParqetApiClient(
+            session,
+            access_token,
+            rate_limit=async_get_rate_limit_state(self.hass),
+        )
 
         try:
             user_info, portfolios = await asyncio.gather(
@@ -461,7 +466,11 @@ class ParqetOAuth2FlowHandler(
             return self.async_abort(reason="cannot_connect")
 
         session = aiohttp_client.async_get_clientsession(self.hass)
-        api = ParqetApiClient(session, oauth_session=oauth_session)
+        api = ParqetApiClient(
+            session,
+            oauth_session=oauth_session,
+            rate_limit=async_get_rate_limit_state(self.hass),
+        )
 
         try:
             portfolios = await api.async_list_portfolios()

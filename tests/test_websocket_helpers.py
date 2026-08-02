@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
@@ -23,8 +23,11 @@ from custom_components.parqet.snapshot_ws import combined_snapshot_data
 from custom_components.parqet.websocket_api import (
     CombinedUnavailableError,
     _async_get_combined_performance,
+    _async_get_performance,
     aggregate_performance_payloads,
 )
+
+from .conftest import MOCK_PORTFOLIO_ID
 
 
 def _payload(total: float, unrealized: float, dividend: float, holding_value: float):
@@ -215,6 +218,7 @@ async def test_combined_performance_uses_only_selected_loaded_sources() -> None:
         state=ConfigEntryState.LOADED,
         data={CONF_PORTFOLIO_META: {"p1": {"currency": "EUR"}}},
         runtime_data=SimpleNamespace(
+            performance_cache={},
             api=api1,
             coordinators={"p1": SimpleNamespace(data={})},
         ),
@@ -225,6 +229,7 @@ async def test_combined_performance_uses_only_selected_loaded_sources() -> None:
         state=ConfigEntryState.LOADED,
         data={CONF_PORTFOLIO_META: {"p2": {"currency": "EUR"}}},
         runtime_data=SimpleNamespace(
+            performance_cache={},
             api=api2,
             coordinators={"p2": SimpleNamespace(data={})},
         ),
@@ -329,3 +334,54 @@ async def test_combined_performance_rejects_unloaded_selected_source(
         )
 
     assert error.value.code == "not_available"
+
+
+class TestPerformanceCacheServesRepeats:
+    """The handler must actually consult the cache, not just maintain it."""
+
+    @staticmethod
+    def _connection() -> MagicMock:
+        connection = MagicMock()
+        connection.send_result = MagicMock()
+        connection.send_error = MagicMock()
+        return connection
+
+    async def test_second_identical_request_does_not_hit_the_api(
+        self, hass: HomeAssistant, init_integration: MockConfigEntry
+    ) -> None:
+        """Interval re-clicks inside the TTL must be served from cache."""
+        runtime = init_integration.runtime_data
+        runtime.api.async_get_performance.reset_mock()
+        runtime.api.async_get_performance.return_value = {"performance": {}}
+
+        msg = {
+            "id": 1,
+            "entry_id": init_integration.entry_id,
+            "portfolio_id": MOCK_PORTFOLIO_ID,
+            "interval": "1y",
+        }
+        await _async_get_performance(hass, self._connection(), msg)
+        await _async_get_performance(hass, self._connection(), {**msg, "id": 2})
+
+        assert runtime.api.async_get_performance.call_count == 1
+
+    async def test_a_different_interval_is_fetched_fresh(
+        self, hass: HomeAssistant, init_integration: MockConfigEntry
+    ) -> None:
+        """The cache must not serve one interval's data for another."""
+        runtime = init_integration.runtime_data
+        runtime.api.async_get_performance.reset_mock()
+        runtime.api.async_get_performance.return_value = {"performance": {}}
+
+        msg = {
+            "id": 1,
+            "entry_id": init_integration.entry_id,
+            "portfolio_id": MOCK_PORTFOLIO_ID,
+            "interval": "1y",
+        }
+        await _async_get_performance(hass, self._connection(), msg)
+        await _async_get_performance(
+            hass, self._connection(), {**msg, "id": 2, "interval": "max"}
+        )
+
+        assert runtime.api.async_get_performance.call_count == 2
