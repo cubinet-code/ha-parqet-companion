@@ -19,9 +19,11 @@ async def async_get_config_entry_diagnostics(
     """Return diagnostics for the config entry, broken down per portfolio.
 
     The Combined entry owns no coordinators of its own, so it only contributes
-    its config entry data here.
+    its config entry data here. Diagnostics can also be downloaded for an entry
+    that failed to set up or was unloaded — HA drops `runtime_data` in that
+    case, so it must not be accessed directly.
     """
-    runtime = entry.runtime_data
+    runtime = getattr(entry, "runtime_data", None)
 
     portfolios: dict[str, dict[str, Any]] = {}
     if isinstance(runtime, ParqetAccountRuntime):

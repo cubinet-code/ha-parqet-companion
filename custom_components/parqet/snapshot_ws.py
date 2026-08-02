@@ -8,6 +8,7 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
+from .const import COMBINED_UNIQUE_ID
 from .snapshot import SnapshotManager
 from .websocket_api import (
     CombinedUnavailableError,
@@ -120,7 +121,7 @@ async def _async_get_snapshot(
     msg: dict[str, Any],
 ) -> None:
     """Return snapshot-based daily P&L data (inner logic)."""
-    if msg.get("portfolio_id") == "combined_accounts":
+    if msg.get("portfolio_id") == COMBINED_UNIQUE_ID:
         try:
             data = combined_snapshot_data(hass, msg["entry_id"])
         except CombinedUnavailableError as err:

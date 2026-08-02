@@ -322,7 +322,7 @@ def _active_holdings(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Return non-sold holdings from one portfolio payload."""
     return [
         holding
-        for holding in data.get("holdings", [])
+        for holding in data.get("holdings") or []
         if not holding.get("position", {}).get("isSold", False)
     ]
 
@@ -345,16 +345,8 @@ def _aggregate_value(
     return sum(values)
 
 
-def _has_multiple_account_sources(
-    coordinators_by_entry: dict[str, list[ParqetDataUpdateCoordinator]],
-) -> bool:
-    """Return whether aggregate sensors can calculate a combined state."""
-    return len(coordinators_by_entry) >= 2
-
-
-def _combined_top_holdings(datasets: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return the top 5 active holdings by current value across all payloads."""
-    holdings = [holding for data in datasets for holding in _active_holdings(data)]
+def _top_holdings(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the top 5 holdings by current value, weighted against their total."""
     sorted_holdings = sorted(
         holdings,
         key=lambda h: h.get("position", {}).get("currentValue", 0),
@@ -437,6 +429,9 @@ class ParqetAggregateSensor(SensorEntity):
         self.entity_description = description
         self._remove_listeners: list[CALLBACK_TYPE] = []
         self._remove_source_listener: CALLBACK_TYPE | None = None
+        # Set only while handling the unload notification for a source entry,
+        # which HA still reports as LOADED at that point (see async_unload_entry).
+        self._unloading_entry_id: str | None = None
         self._attr_unique_id = f"{AGGREGATE_DEVICE_ID}_{description.key}"
         self._attr_entity_registry_enabled_default = (
             description.entity_registry_enabled_default
@@ -472,16 +467,20 @@ class ParqetAggregateSensor(SensorEntity):
         self._remove_listeners.clear()
 
     @callback
-    def refresh_coordinators(self) -> None:
+    def refresh_coordinators(self, unloading_entry_id: str | None = None) -> None:
         """Refresh coordinator listeners after account entries change."""
-        self._clear_coordinator_listeners()
-        for coordinator in self._coordinators:
-            self._remove_listeners.append(
-                coordinator.async_add_listener(self.async_write_ha_state)
-            )
+        self._unloading_entry_id = unloading_entry_id
+        try:
+            self._clear_coordinator_listeners()
+            for coordinator in self._coordinators:
+                self._remove_listeners.append(
+                    coordinator.async_add_listener(self.async_write_ha_state)
+                )
 
-        if self.platform is not None:
-            self.async_write_ha_state()
+            if self.platform is not None:
+                self.async_write_ha_state()
+        finally:
+            self._unloading_entry_id = None
 
     @property
     def _configured_source_ids(self) -> list[str]:
@@ -510,6 +509,8 @@ class ParqetAggregateSensor(SensorEntity):
         configured_source_ids = set(self._configured_source_ids)
         for entry in self._hass.config_entries.async_entries(DOMAIN):
             if entry.entry_id not in configured_source_ids:
+                continue
+            if entry.entry_id == self._unloading_entry_id:
                 continue
             if entry.state is not ConfigEntryState.LOADED:
                 continue
@@ -611,15 +612,11 @@ class ParqetAggregateSensor(SensorEntity):
             "currency": self._common_currency,
         }
         if self.entity_description.key == "total_value":
-            attrs["top_holdings"] = _combined_top_holdings(datasets)
-            attrs["holdings_count"] = _aggregate_value(
-                datasets,
-                next(
-                    description
-                    for description in AGGREGATE_SENSORS
-                    if description.key == "holdings_count"
-                ),
-            )
+            active = [
+                holding for data in datasets for holding in _active_holdings(data)
+            ]
+            attrs["top_holdings"] = _top_holdings(active)
+            attrs["holdings_count"] = len(active)
         return attrs
 
 
@@ -672,33 +669,11 @@ class ParqetSensor(ParqetEntity, SensorEntity):
         if self.coordinator.data is None:
             return None
 
-        holdings = self.coordinator.data.get("holdings", [])
-        # Top 5 holdings by current value.
-        sorted_holdings = sorted(
-            (h for h in holdings if not h.get("position", {}).get("isSold", False)),
-            key=lambda h: h.get("position", {}).get("currentValue", 0),
-            reverse=True,
-        )
-        total = sum(
-            h.get("position", {}).get("currentValue", 0) for h in sorted_holdings
-        )
-        top = [
-            {
-                "name": h.get("asset", {}).get("name", h.get("nickname", "Unknown")),
-                "value": round(h.get("position", {}).get("currentValue", 0), 2),
-                "weight": round(
-                    h.get("position", {}).get("currentValue", 0) / total * 100, 1
-                )
-                if total > 0
-                else 0,
-            }
-            for h in sorted_holdings[:5]
-        ]
-
+        active = _active_holdings(self.coordinator.data)
         return {
             "entry_id": self._entry_id,
             "portfolio_id": self._portfolio_id,
-            "holdings_count": len(sorted_holdings),
-            "top_holdings": top,
+            "holdings_count": len(active),
+            "top_holdings": _top_holdings(active),
             "interval": self.coordinator.interval,
         }

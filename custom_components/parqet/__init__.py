@@ -94,9 +94,20 @@ def _migrate_combined_registry_ownership(
     entry: ParqetConfigEntry,
 ) -> None:
     """Move legacy aggregate registry records to the explicit Combined entry."""
+    device_registry = dr.async_get(hass)
+    device = device_registry.async_get_device(
+        identifiers={(DOMAIN, COMBINED_UNIQUE_ID)}
+    )
+    if device is None:
+        # No legacy aggregate device means there is nothing to re-own; the
+        # aggregate entities have always lived on it.
+        return
+
     entity_registry = er.async_get(hass)
     unique_id_prefix = f"{COMBINED_UNIQUE_ID}_"
-    for registry_entry in list(entity_registry.entities.values()):
+    for registry_entry in er.async_entries_for_device(
+        entity_registry, device.id, include_disabled_entities=True
+    ):
         if (
             registry_entry.platform == DOMAIN
             and registry_entry.unique_id.startswith(unique_id_prefix)
@@ -107,12 +118,6 @@ def _migrate_combined_registry_ownership(
                 config_entry_id=entry.entry_id,
             )
 
-    device_registry = dr.async_get(hass)
-    device = device_registry.async_get_device(
-        identifiers={(DOMAIN, COMBINED_UNIQUE_ID)}
-    )
-    if device is None:
-        return
     if entry.entry_id not in device.config_entries:
         device_registry.async_update_device(
             device.id,
@@ -273,7 +278,7 @@ async def async_setup_entry(
     @callback
     def _notify_combined_when_loaded() -> None:
         if entry.state is ConfigEntryState.LOADED:
-            async_dispatcher_send(hass, SIGNAL_ACCOUNTS_UPDATED)
+            async_dispatcher_send(hass, SIGNAL_ACCOUNTS_UPDATED, None)
 
     entry.async_on_unload(entry.async_on_state_change(_notify_combined_when_loaded))
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -301,6 +306,10 @@ async def async_unload_entry(
     platforms = COMBINED_PLATFORMS if is_combined else PLATFORMS
     unload_ok = await hass.config_entries.async_unload_platforms(entry, platforms)
     if unload_ok and not is_combined:
-        async_dispatcher_send(hass, SIGNAL_ACCOUNTS_UPDATED)
+        # HA only flips this entry to NOT_LOADED (and drops `runtime_data`)
+        # *after* this coroutine returns, so the Combined sensors would still
+        # read it as a loaded source and publish a stale total. Name the entry
+        # that is going away so they can exclude it right now.
+        async_dispatcher_send(hass, SIGNAL_ACCOUNTS_UPDATED, entry.entry_id)
 
     return unload_ok

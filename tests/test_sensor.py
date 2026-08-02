@@ -22,10 +22,10 @@ from custom_components.parqet.sensor import (
     AGGREGATE_SENSORS,
     ALL_SENSORS,
     ParqetAggregateSensor,
+    _active_holdings,
     _aggregate_value,
-    _combined_top_holdings,
-    _has_multiple_account_sources,
     _resolve_path,
+    _top_holdings,
 )
 
 from .conftest import MOCK_CURRENCY, MOCK_PERFORMANCE
@@ -211,15 +211,15 @@ class TestAggregateSensors:
 
     def test_combined_top_holdings_recomputes_weights(self) -> None:
         """Test combined top holdings are sorted and weighted against combined total."""
-        top = _combined_top_holdings([MOCK_PERFORMANCE, MOCK_PERFORMANCE])
+        top = _top_holdings(
+            [
+                holding
+                for data in (MOCK_PERFORMANCE, MOCK_PERFORMANCE)
+                for holding in _active_holdings(data)
+            ]
+        )
         assert top[0] == {"name": "Test Stock", "value": 5500.0, "weight": 25.0}
         assert len(top) == 4
-
-    def test_aggregate_sensors_require_multiple_accounts(self) -> None:
-        """Test aggregate entities are exposed only for multiple account entries."""
-        assert not _has_multiple_account_sources({})
-        assert not _has_multiple_account_sources({"entry_1": []})
-        assert _has_multiple_account_sources({"entry_1": [], "entry_2": []})
 
     def test_aggregate_sensor_does_not_poll(
         self,
@@ -307,6 +307,38 @@ class TestAggregateSensors:
         first.mock_state(hass, ConfigEntryState.LOADED)
         assert not sensor.available
         assert sensor.native_value is None
+
+    def test_combined_excludes_the_entry_that_is_unloading(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """HA still reports a source as LOADED while its unload runs."""
+        first = _account_source(
+            hass, title="First", portfolio_id="p1", currency="EUR", total_value=100
+        )
+        second = _account_source(
+            hass, title="Second", portfolio_id="p2", currency="EUR", total_value=200
+        )
+        combined = _combined_entry(
+            hass, [first.entry_id, second.entry_id], "EUR"
+        )
+        sensor = ParqetAggregateSensor(
+            hass, combined, self._description("total_value")
+        )
+        first.mock_state(hass, ConfigEntryState.LOADED)
+        second.mock_state(hass, ConfigEntryState.LOADED)
+        assert sensor.available
+
+        written: list[bool] = []
+        sensor.platform = MagicMock()
+        sensor.async_write_ha_state = lambda: written.append(sensor.available)
+
+        sensor.refresh_coordinators(second.entry_id)
+
+        # The state written during the unload must already be unavailable, even
+        # though HA has not flipped the source entry to NOT_LOADED yet.
+        assert written == [False]
+        assert second.state is ConfigEntryState.LOADED
 
     def test_combined_is_unavailable_after_source_currency_changes(
         self,

@@ -119,5 +119,16 @@ describe('ParqetCompanionCard combined routing', () => {
     }));
     expect(result.performance.unrealizedGains.inInterval).not.toHaveProperty('returnGross');
     expect(result.performance.realizedGains.inInterval).not.toHaveProperty('returnNet');
+
+    // Deleting the Combined entry does not change `_portfolios` (the Combined
+    // device is never part of it), so the cached proxy must not keep routing
+    // requests to the now-dead Combined entry.
+    delete hass.devices!['device_combined'];
+    delete hass.entities!['sensor.parqet_combined_total_value'];
+    delete hass.states['sensor.parqet_combined_total_value'];
+
+    const afterRemoval = card._allPortfoliosProxy();
+    expect(afterRemoval.portfolioId).toBe('__all__');
+    expect(afterRemoval.entryId).not.toBe('entry_combined');
   });
 });

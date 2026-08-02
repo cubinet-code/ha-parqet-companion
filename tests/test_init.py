@@ -101,7 +101,7 @@ async def test_account_notifies_combined_only_after_loaded_state(
             None,
         )
 
-    send.assert_called_once_with(hass, SIGNAL_ACCOUNTS_UPDATED)
+    send.assert_called_once_with(hass, SIGNAL_ACCOUNTS_UPDATED, None)
 
 
 async def test_combined_entry_owns_device_and_survives_reload(

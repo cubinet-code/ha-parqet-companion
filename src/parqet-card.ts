@@ -53,6 +53,7 @@ export class ParqetCompanionCard extends LitElement {
   private _fetchGen = 0;
   private _cachedProxy: DiscoveredPortfolio | null = null;
   private _cachedProxySource: DiscoveredPortfolio[] | null = null;
+  private _cachedProxyKey: string | null = null;
 
   // ─── HA card API ──────────────────────────────────────────────────────────
 
@@ -454,17 +455,24 @@ export class ParqetCompanionCard extends LitElement {
   }
 
   private _allPortfoliosProxy(): DiscoveredPortfolio {
-    if (this._cachedProxySource === this._portfolios && this._cachedProxy) {
+    const entryIds = new Set(this._portfolios.map((portfolio) => portfolio.entryId));
+    // The Combined device is filtered out of `_portfolios`, so its appearance
+    // or removal never changes that array — it has to be part of the cache key
+    // or a deleted Combined entry would keep being used as the request route.
+    const combined = entryIds.size > 1 ? discoverCombinedPortfolio(this.hass) : null;
+    const proxyKey = combined?.entryId ?? null;
+    if (
+      this._cachedProxySource === this._portfolios
+      && this._cachedProxy
+      && this._cachedProxyKey === proxyKey
+    ) {
       return this._cachedProxy;
     }
-    const entryIds = new Set(this._portfolios.map((portfolio) => portfolio.entryId));
-    if (entryIds.size > 1) {
-      const combined = discoverCombinedPortfolio(this.hass);
-      if (combined) {
-        this._cachedProxy = combined;
-        this._cachedProxySource = this._portfolios;
-        return this._cachedProxy;
-      }
+    this._cachedProxyKey = proxyKey;
+    if (combined) {
+      this._cachedProxy = combined;
+      this._cachedProxySource = this._portfolios;
+      return this._cachedProxy;
     }
 
     this._cachedProxy = {

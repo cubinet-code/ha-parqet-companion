@@ -111,14 +111,13 @@ function _discoverViaRegistry(hass: Hass, deviceId?: string): DiscoveredPortfoli
       const state = hass.states[entity_id];
       if (!state) continue;
 
-      // Get entry_id from state attributes. Combined sensors expose the source
-      // entry IDs as an array; any loaded entry can authorize the combined WS
-      // request because the backend aggregates across loaded Parqet entries.
+      // Get entry_id from state attributes (set by our integration). Combined
+      // sensors publish the Combined entry's own id here — the backend rejects
+      // a source entry id for combined requests, so there is no fallback: when
+      // the attribute is missing the sensor is unavailable and must not be
+      // offered as a route.
       if (!entryId && state.attributes?.['entry_id']) {
         entryId = state.attributes['entry_id'] as string;
-      }
-      if (!entryId && Array.isArray(state.attributes?.['source_entry_ids'])) {
-        entryId = state.attributes['source_entry_ids'][0] as string;
       }
       if (!portfolioId && state.attributes?.['portfolio_id']) {
         portfolioId = state.attributes['portfolio_id'] as string;

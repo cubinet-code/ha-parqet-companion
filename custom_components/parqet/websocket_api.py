@@ -7,6 +7,7 @@ Commands accept either:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -17,6 +18,7 @@ from homeassistant.core import HomeAssistant, callback
 
 from .api import ParqetApiError, ParqetRateLimitError
 from .const import (
+    COMBINED_UNIQUE_ID,
     CONF_CURRENCY,
     CONF_ENTRY_TYPE,
     CONF_PORTFOLIO_META,
@@ -272,13 +274,16 @@ async def _async_get_combined_performance(
     combined_entry_id: str,
 ) -> dict[str, Any]:
     """Fetch and aggregate performance for the explicitly selected accounts."""
-    payloads: list[dict[str, Any]] = []
-    for runtime in _combined_source_runtimes(hass, combined_entry_id):
-        portfolio_ids = list(runtime.coordinators)
-        payloads.append(
-            await runtime.api.async_get_performance(portfolio_ids, interval)
+    runtimes = _combined_source_runtimes(hass, combined_entry_id)
+    # One round-trip per account; each account has its own OAuth session, so
+    # there is no shared token lock to serialise on.
+    payloads = await asyncio.gather(
+        *(
+            runtime.api.async_get_performance(list(runtime.coordinators), interval)
+            for runtime in runtimes
         )
-    return aggregate_performance_payloads(payloads)
+    )
+    return aggregate_performance_payloads(list(payloads))
 
 
 def async_register_websocket_api(hass: HomeAssistant) -> None:
@@ -375,7 +380,7 @@ async def ws_get_performance(
     if the account only has one portfolio).
     Aggregated: pass `entry_id` + `portfolio_ids` (list).
     """
-    if msg.get("portfolio_id") == "combined_accounts":
+    if msg.get("portfolio_id") == COMBINED_UNIQUE_ID:
         try:
             data = await _async_get_combined_performance(
                 hass, msg["interval"], msg["entry_id"]
