@@ -2,12 +2,32 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+import asyncio
+from datetime import UTC, date, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from custom_components.parqet.api import ParqetApiError
 from custom_components.parqet.calendar import (
+    CALENDAR_ACTIVITY_CACHE_TTL,
+    ParqetActivityCalendar,
     _activity_to_event,
     _resolve_asset_name,
 )
+
+
+def _calendar_with_api(api: AsyncMock) -> ParqetActivityCalendar:
+    """Build a calendar entity around one mocked portfolio coordinator."""
+    coordinator = MagicMock()
+    coordinator.api = api
+    coordinator.data = {"holdings": []}
+    return ParqetActivityCalendar(
+        coordinator,
+        MagicMock(),
+        portfolio_id="p1",
+        portfolio_name="Portfolio One",
+    )
 
 
 class TestResolveAssetName:
@@ -162,3 +182,167 @@ class TestActivityToEvent:
         }
         event = _activity_to_event(activity, {})
         assert event.summary == "Some New Type: Test"
+
+
+class TestCalendarActivityCache:
+    """Calendar windows should reuse one cached raw activity response."""
+
+    async def test_different_windows_share_cached_activities(self) -> None:
+        """Range filtering stays local and does not refetch the same payload."""
+        activities = [
+            {
+                "type": "buy",
+                "asset": {"name": "March"},
+                "datetime": "2026-03-10T10:00:00Z",
+            },
+            {
+                "type": "sell",
+                "asset": {"name": "April"},
+                "datetime": "2026-04-10T10:00:00Z",
+            },
+        ]
+        api = AsyncMock()
+        api.async_get_activities.return_value = {"activities": activities}
+        calendar = _calendar_with_api(api)
+
+        march = await calendar.async_get_events(
+            MagicMock(),
+            datetime(2026, 3, 1, tzinfo=UTC),
+            datetime(2026, 4, 1, tzinfo=UTC),
+        )
+        april = await calendar.async_get_events(
+            MagicMock(),
+            datetime(2026, 4, 1, tzinfo=UTC),
+            datetime(2026, 5, 1, tzinfo=UTC),
+        )
+
+        assert [event.summary for event in march] == ["Buy: March"]
+        assert [event.summary for event in april] == ["Sell: April"]
+        api.async_get_activities.assert_awaited_once_with("p1", limit=500)
+
+    async def test_concurrent_windows_share_one_activity_request(self) -> None:
+        """Overlapping HA calendar polls await one upstream API task."""
+        started = asyncio.Event()
+        release = asyncio.Event()
+        payload = {
+            "activities": [
+                {
+                    "type": "dividend",
+                    "asset": {"name": "Shared"},
+                    "datetime": "2026-03-12T10:00:00Z",
+                }
+            ]
+        }
+
+        async def fetch(_portfolio_id: str, *, limit: int):
+            started.set()
+            await release.wait()
+            return payload
+
+        api = AsyncMock()
+        api.async_get_activities.side_effect = fetch
+        calendar = _calendar_with_api(api)
+        start = datetime(2026, 3, 1, tzinfo=UTC)
+        end = datetime(2026, 4, 1, tzinfo=UTC)
+
+        first = asyncio.create_task(
+            calendar.async_get_events(MagicMock(), start, end)
+        )
+        await started.wait()
+        second = asyncio.create_task(
+            calendar.async_get_events(MagicMock(), start, end)
+        )
+        await asyncio.sleep(0)
+        release.set()
+
+        first_events, second_events = await asyncio.gather(first, second)
+        assert [event.summary for event in first_events] == ["Dividend: Shared"]
+        assert [event.summary for event in second_events] == ["Dividend: Shared"]
+        api.async_get_activities.assert_awaited_once_with("p1", limit=500)
+
+    async def test_cancelled_window_does_not_cancel_shared_activity_request(
+        self,
+    ) -> None:
+        """One cancelled calendar poll cannot abort another active poll."""
+        started = asyncio.Event()
+        release = asyncio.Event()
+        payload = {
+            "activities": [
+                {
+                    "type": "buy",
+                    "asset": {"name": "Survivor"},
+                    "datetime": "2026-03-20T10:00:00Z",
+                }
+            ]
+        }
+
+        async def fetch(_portfolio_id: str, *, limit: int):
+            started.set()
+            await release.wait()
+            return payload
+
+        api = AsyncMock()
+        api.async_get_activities.side_effect = fetch
+        calendar = _calendar_with_api(api)
+        start = datetime(2026, 3, 1, tzinfo=UTC)
+        end = datetime(2026, 4, 1, tzinfo=UTC)
+
+        cancelled = asyncio.create_task(
+            calendar.async_get_events(MagicMock(), start, end)
+        )
+        await started.wait()
+        survivor = asyncio.create_task(
+            calendar.async_get_events(MagicMock(), start, end)
+        )
+        await asyncio.sleep(0)
+
+        cancelled.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await cancelled
+        release.set()
+
+        assert [event.summary for event in await survivor] == ["Buy: Survivor"]
+        api.async_get_activities.assert_awaited_once_with("p1", limit=500)
+
+    async def test_expired_cache_is_refetched(self) -> None:
+        """A cache older than one hour triggers a fresh activities request."""
+        api = AsyncMock()
+        api.async_get_activities.return_value = {"activities": []}
+        calendar = _calendar_with_api(api)
+        start = datetime(2026, 3, 1, tzinfo=UTC)
+        end = datetime(2026, 4, 1, tzinfo=UTC)
+
+        await calendar.async_get_events(MagicMock(), start, end)
+        assert calendar._activity_cache is not None
+        stored_at, activities = calendar._activity_cache
+        calendar._activity_cache = (
+            stored_at - CALENDAR_ACTIVITY_CACHE_TTL - 1,
+            activities,
+        )
+        await calendar.async_get_events(MagicMock(), start, end)
+
+        assert api.async_get_activities.await_count == 2
+
+    async def test_failed_request_is_not_cached(self) -> None:
+        """A transient API failure leaves the next calendar poll retriable."""
+        payload = {
+            "activities": [
+                {
+                    "type": "sell",
+                    "asset": {"name": "Retry"},
+                    "datetime": "2026-03-22T10:00:00Z",
+                }
+            ]
+        }
+        api = AsyncMock()
+        api.async_get_activities.side_effect = [ParqetApiError("boom"), payload]
+        calendar = _calendar_with_api(api)
+        start = datetime(2026, 3, 1, tzinfo=UTC)
+        end = datetime(2026, 4, 1, tzinfo=UTC)
+
+        assert await calendar.async_get_events(MagicMock(), start, end) == []
+        await asyncio.sleep(0)
+        events = await calendar.async_get_events(MagicMock(), start, end)
+
+        assert [event.summary for event in events] == ["Sell: Retry"]
+        assert api.async_get_activities.await_count == 2
