@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -20,6 +22,7 @@ from .entity import ParqetEntity
 _LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
+CALENDAR_ACTIVITY_CACHE_TTL = 60 * 60
 
 ACTIVITY_LABELS: dict[str, str] = {
     "buy": "Buy",
@@ -154,6 +157,8 @@ class ParqetActivityCalendar(ParqetEntity, CalendarEntity):
         super().__init__(coordinator, entry, portfolio_id, portfolio_name)
         self._attr_unique_id = f"{portfolio_id}_activities"
         self._cached_events: list[CalendarEvent] = []
+        self._activity_cache: tuple[float, list[dict[str, Any]]] | None = None
+        self._activity_inflight: asyncio.Task[list[dict[str, Any]]] | None = None
 
     @property
     def event(self) -> CalendarEvent | None:
@@ -170,6 +175,15 @@ class ParqetActivityCalendar(ParqetEntity, CalendarEntity):
         # No upcoming event — return the most recent past event.
         return self._cached_events[-1]
 
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel API work owned by this calendar entity."""
+        task = self._activity_inflight
+        self._activity_inflight = None
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        await super().async_will_remove_from_hass()
+
     def _build_holdings_map(self) -> dict[str, str]:
         """Build a holding_id → display_name map from coordinator data."""
         holdings = (self.coordinator.data or {}).get("holdings", [])
@@ -181,6 +195,38 @@ class ParqetActivityCalendar(ParqetEntity, CalendarEntity):
                 result[hid] = name
         return result
 
+    async def _async_get_activities(self) -> list[dict[str, Any]]:
+        """Return recent raw activities, refreshing at most once per hour."""
+        now = time.monotonic()
+        if self._activity_cache is not None:
+            stored_at, activities = self._activity_cache
+            if now - stored_at <= CALENDAR_ACTIVITY_CACHE_TTL:
+                return activities
+
+        task = self._activity_inflight
+        if task is None:
+
+            async def _fetch_and_cache() -> list[dict[str, Any]]:
+                data = await self.coordinator.api.async_get_activities(
+                    self._portfolio_id,
+                    limit=500,
+                )
+                activities = data.get("activities") or []
+                self._activity_cache = (time.monotonic(), activities)
+                return activities
+
+            task = asyncio.create_task(_fetch_and_cache())
+            self._activity_inflight = task
+
+            def _clear_inflight(done: asyncio.Task[list[dict[str, Any]]]) -> None:
+                if self._activity_inflight is done:
+                    self._activity_inflight = None
+
+            task.add_done_callback(_clear_inflight)
+
+        # HA cancelling one calendar request must not cancel shared work.
+        return await asyncio.shield(task)
+
     async def async_get_events(
         self,
         hass: HomeAssistant,
@@ -189,16 +235,12 @@ class ParqetActivityCalendar(ParqetEntity, CalendarEntity):
     ) -> list[CalendarEvent]:
         """Fetch activities from the API for a date range."""
         try:
-            data = await self.coordinator.api.async_get_activities(
-                self._portfolio_id,
-                limit=500,
-            )
+            activities = await self._async_get_activities()
         except ParqetApiError:
             _LOGGER.exception("Failed to fetch activities for calendar")
             return []
 
         holdings_map = self._build_holdings_map()
-        activities = data.get("activities", [])
         events: list[CalendarEvent] = []
 
         for activity in activities:

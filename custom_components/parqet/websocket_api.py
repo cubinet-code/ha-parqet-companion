@@ -295,9 +295,25 @@ async def _async_fetch_performance(
         if now - stored_at <= PERFORMANCE_CACHE_TTL:
             return payload
 
-    data = await runtime.api.async_get_performance(portfolio_ids, interval)
-    runtime.performance_cache[key] = (now, data)
-    return data
+    task = runtime.performance_inflight.get(key)
+    if task is None:
+
+        async def _fetch_and_cache() -> dict[str, Any]:
+            data = await runtime.api.async_get_performance(portfolio_ids, interval)
+            runtime.performance_cache[key] = (time.monotonic(), data)
+            return data
+
+        task = asyncio.create_task(_fetch_and_cache())
+        runtime.performance_inflight[key] = task
+
+        def _clear_inflight(done: asyncio.Task[dict[str, Any]]) -> None:
+            if runtime.performance_inflight.get(key) is done:
+                runtime.performance_inflight.pop(key, None)
+
+        task.add_done_callback(_clear_inflight)
+
+    # A disconnected card must not cancel work another card is awaiting.
+    return await asyncio.shield(task)
 
 
 async def _async_get_combined_performance(
