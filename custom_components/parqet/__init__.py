@@ -87,6 +87,11 @@ class ParqetAccountRuntime:
     performance_cache: dict[
         tuple[tuple[str, ...], str], tuple[float, dict[str, Any]]
     ] = field(default_factory=dict)
+    # Cache misses for the same key share one task. Kept separate from completed
+    # responses so failures are never retained as cache entries.
+    performance_inflight: dict[
+        tuple[tuple[str, ...], str], asyncio.Task[dict[str, Any]]
+    ] = field(default_factory=dict)
 
 
 @dataclass

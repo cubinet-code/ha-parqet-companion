@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -10,7 +11,8 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.parqet import ParqetCombinedRuntime
+from custom_components.parqet import ParqetAccountRuntime, ParqetCombinedRuntime
+from custom_components.parqet.api import ParqetApiError
 from custom_components.parqet.const import (
     CONF_CURRENCY,
     CONF_ENTRY_TYPE,
@@ -22,6 +24,7 @@ from custom_components.parqet.const import (
 from custom_components.parqet.snapshot_ws import combined_snapshot_data
 from custom_components.parqet.websocket_api import (
     CombinedUnavailableError,
+    _async_fetch_performance,
     _async_get_combined_performance,
     _async_get_performance,
     aggregate_performance_payloads,
@@ -219,6 +222,7 @@ async def test_combined_performance_uses_only_selected_loaded_sources() -> None:
         data={CONF_PORTFOLIO_META: {"p1": {"currency": "EUR"}}},
         runtime_data=SimpleNamespace(
             performance_cache={},
+            performance_inflight={},
             api=api1,
             coordinators={"p1": SimpleNamespace(data={})},
         ),
@@ -230,6 +234,7 @@ async def test_combined_performance_uses_only_selected_loaded_sources() -> None:
         data={CONF_PORTFOLIO_META: {"p2": {"currency": "EUR"}}},
         runtime_data=SimpleNamespace(
             performance_cache={},
+            performance_inflight={},
             api=api2,
             coordinators={"p2": SimpleNamespace(data={})},
         ),
@@ -385,3 +390,82 @@ class TestPerformanceCacheServesRepeats:
         )
 
         assert runtime.api.async_get_performance.call_count == 2
+
+
+class TestPerformanceSingleflight:
+    """Overlapping cache misses must share one upstream request."""
+
+    async def test_identical_concurrent_requests_are_coalesced(self) -> None:
+        """Two callers for one key await one API task and receive its result."""
+        started = asyncio.Event()
+        release = asyncio.Event()
+        payload = {"performance": {"valuation": {"atIntervalEnd": 123}}}
+
+        async def fetch(_portfolio_ids: list[str], _interval: str):
+            started.set()
+            await release.wait()
+            return payload
+
+        api = SimpleNamespace(async_get_performance=AsyncMock(side_effect=fetch))
+        runtime = ParqetAccountRuntime(api=api)
+
+        first = asyncio.create_task(_async_fetch_performance(runtime, ["p1"], "1y"))
+        await started.wait()
+        second = asyncio.create_task(
+            _async_fetch_performance(runtime, ["p1"], "1y")
+        )
+        await asyncio.sleep(0)
+        release.set()
+
+        assert await asyncio.gather(first, second) == [payload, payload]
+        api.async_get_performance.assert_awaited_once_with(["p1"], "1y")
+
+    async def test_cancelled_caller_does_not_cancel_shared_request(self) -> None:
+        """Disconnecting one card cannot cancel work another card still needs."""
+        started = asyncio.Event()
+        release = asyncio.Event()
+        payload = {"performance": {"valuation": {"atIntervalEnd": 456}}}
+
+        async def fetch(_portfolio_ids: list[str], _interval: str):
+            started.set()
+            await release.wait()
+            return payload
+
+        api = SimpleNamespace(async_get_performance=AsyncMock(side_effect=fetch))
+        runtime = ParqetAccountRuntime(api=api)
+
+        cancelled = asyncio.create_task(
+            _async_fetch_performance(runtime, ["p1"], "max")
+        )
+        await started.wait()
+        survivor = asyncio.create_task(
+            _async_fetch_performance(runtime, ["p1"], "max")
+        )
+        await asyncio.sleep(0)
+
+        cancelled.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await cancelled
+        release.set()
+
+        assert await survivor == payload
+        api.async_get_performance.assert_awaited_once_with(["p1"], "max")
+
+    async def test_failed_request_is_not_cached_and_can_be_retried(self) -> None:
+        """An API failure clears singleflight state and the next call runs."""
+        payload = {"performance": {"valuation": {"atIntervalEnd": 789}}}
+        api = SimpleNamespace(
+            async_get_performance=AsyncMock(
+                side_effect=[ParqetApiError("boom"), payload]
+            )
+        )
+        runtime = ParqetAccountRuntime(api=api)
+
+        with pytest.raises(ParqetApiError, match="boom"):
+            await _async_fetch_performance(runtime, ["p1"], "max")
+        await asyncio.sleep(0)
+
+        assert runtime.performance_cache == {}
+        assert runtime.performance_inflight == {}
+        assert await _async_fetch_performance(runtime, ["p1"], "max") == payload
+        assert api.async_get_performance.await_count == 2
