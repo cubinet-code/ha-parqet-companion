@@ -346,3 +346,71 @@ class TestCalendarActivityCache:
 
         assert [event.summary for event in events] == ["Sell: Retry"]
         assert api.async_get_activities.await_count == 2
+
+    async def test_entity_removal_cancels_inflight_activity_request(self) -> None:
+        """Removing the calendar entity cancels its protected shared task."""
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def fetch(_portfolio_id: str, *, limit: int):
+            started.set()
+            await release.wait()
+            return {"activities": []}
+
+        api = AsyncMock()
+        api.async_get_activities.side_effect = fetch
+        calendar = _calendar_with_api(api)
+        caller = asyncio.create_task(
+            calendar.async_get_events(
+                MagicMock(),
+                datetime(2026, 3, 1, tzinfo=UTC),
+                datetime(2026, 4, 1, tzinfo=UTC),
+            )
+        )
+        await started.wait()
+        shared_task = calendar._activity_inflight
+        assert shared_task is not None
+
+        try:
+            await calendar.async_will_remove_from_hass()
+            assert shared_task.cancelled()
+            assert calendar._activity_inflight is None
+            with pytest.raises(asyncio.CancelledError):
+                await caller
+        finally:
+            if not shared_task.done():
+                shared_task.cancel()
+            caller.cancel()
+            await asyncio.gather(shared_task, caller, return_exceptions=True)
+
+    async def test_shared_failure_falls_back_for_all_waiters(self) -> None:
+        """Two calendar callers share one failed request and both get fallback."""
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def fetch(_portfolio_id: str, *, limit: int):
+            started.set()
+            await release.wait()
+            raise ParqetApiError("shared calendar boom")
+
+        api = AsyncMock()
+        api.async_get_activities.side_effect = fetch
+        calendar = _calendar_with_api(api)
+        start = datetime(2026, 3, 1, tzinfo=UTC)
+        end = datetime(2026, 4, 1, tzinfo=UTC)
+        first = asyncio.create_task(
+            calendar.async_get_events(MagicMock(), start, end)
+        )
+        await started.wait()
+        second = asyncio.create_task(
+            calendar.async_get_events(MagicMock(), start, end)
+        )
+        await asyncio.sleep(0)
+        release.set()
+
+        assert await asyncio.gather(first, second) == [[], []]
+        await asyncio.sleep(0)
+
+        api.async_get_activities.assert_awaited_once_with("p1", limit=500)
+        assert calendar._activity_cache is None
+        assert calendar._activity_inflight is None

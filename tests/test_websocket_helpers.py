@@ -469,3 +469,37 @@ class TestPerformanceSingleflight:
         assert runtime.performance_inflight == {}
         assert await _async_fetch_performance(runtime, ["p1"], "max") == payload
         assert api.async_get_performance.await_count == 2
+
+    async def test_shared_failure_reaches_all_waiters_and_clears_state(self) -> None:
+        """All waiters see one failed API task and can retry afterward."""
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def fetch(_portfolio_ids: list[str], _interval: str):
+            started.set()
+            await release.wait()
+            raise ParqetApiError("shared boom")
+
+        api = SimpleNamespace(async_get_performance=AsyncMock(side_effect=fetch))
+        runtime = ParqetAccountRuntime(api=api)
+        first = asyncio.create_task(
+            _async_fetch_performance(runtime, ["p1"], "max")
+        )
+        await started.wait()
+        second = asyncio.create_task(
+            _async_fetch_performance(runtime, ["p1"], "max")
+        )
+        await asyncio.sleep(0)
+        release.set()
+
+        results = await asyncio.gather(first, second, return_exceptions=True)
+        await asyncio.sleep(0)
+
+        assert all(
+            isinstance(result, ParqetApiError)
+            and str(result) == "shared boom"
+            for result in results
+        )
+        api.async_get_performance.assert_awaited_once_with(["p1"], "max")
+        assert runtime.performance_cache == {}
+        assert runtime.performance_inflight == {}

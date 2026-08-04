@@ -175,6 +175,15 @@ class ParqetActivityCalendar(ParqetEntity, CalendarEntity):
         # No upcoming event — return the most recent past event.
         return self._cached_events[-1]
 
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel API work owned by this calendar entity."""
+        task = self._activity_inflight
+        self._activity_inflight = None
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        await super().async_will_remove_from_hass()
+
     def _build_holdings_map(self) -> dict[str, str]:
         """Build a holding_id → display_name map from coordinator data."""
         holdings = (self.coordinator.data or {}).get("holdings", [])

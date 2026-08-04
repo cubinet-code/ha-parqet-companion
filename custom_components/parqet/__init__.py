@@ -318,6 +318,13 @@ async def async_unload_entry(
     is_combined = entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_COMBINED
     runtime = entry.runtime_data
     if isinstance(runtime, ParqetAccountRuntime):
+        inflight = set(runtime.performance_inflight.values())
+        runtime.performance_inflight.clear()
+        for task in inflight:
+            task.cancel()
+        if inflight:
+            await asyncio.gather(*inflight, return_exceptions=True)
+
         for snapshot_mgr in runtime.snapshot_managers.values():
             await snapshot_mgr.async_teardown()
 

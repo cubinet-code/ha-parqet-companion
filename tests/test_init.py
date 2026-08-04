@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -80,6 +81,36 @@ async def test_unload_entry(
 
     result = await async_unload_entry(hass, init_integration)
     assert result is True
+
+
+async def test_unload_cancels_inflight_performance_request(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+) -> None:
+    """Unloading an account cannot leave a shared API request running."""
+    from custom_components.parqet import async_unload_entry
+
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def pending_request() -> dict:
+        started.set()
+        await release.wait()
+        return {}
+
+    runtime = init_integration.runtime_data
+    task = asyncio.create_task(pending_request())
+    runtime.performance_inflight[((MOCK_PORTFOLIO_ID,), "max")] = task
+    await started.wait()
+
+    try:
+        assert await async_unload_entry(hass, init_integration)
+        assert task.cancelled()
+        assert runtime.performance_inflight == {}
+    finally:
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
 
 async def test_account_notifies_combined_only_after_loaded_state(
