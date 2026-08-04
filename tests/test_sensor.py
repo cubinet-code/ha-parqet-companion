@@ -395,11 +395,9 @@ class TestHistoryStatistics:
             assert description.state_class is SensorStateClass.MEASUREMENT, (
                 description.key
             )
-            assert DEFAULT_STATISTICS[description.state_class] == {
-                "mean",
-                "min",
-                "max",
-            }, description.key
+            statistics = DEFAULT_STATISTICS[description.state_class]
+            statistic_types = getattr(statistics, "types", statistics)
+            assert statistic_types == {"mean", "min", "max"}, description.key
 
     async def test_monetary_sensors_carry_portfolio_currency(
         self, hass: HomeAssistant, init_integration: MockConfigEntry
