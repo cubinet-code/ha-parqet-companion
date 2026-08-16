@@ -86,9 +86,11 @@ export function isRateLimitError(err: unknown): boolean {
 /**
  * Format a date string to a localized short date.
  */
-export function fmtDate(iso: string): string {
+export function fmtDate(iso: string, locale?: string): string {
   try {
-    return new Date(iso).toLocaleDateString(undefined, {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return iso;
+    return date.toLocaleDateString(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

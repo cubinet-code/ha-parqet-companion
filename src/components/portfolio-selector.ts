@@ -2,8 +2,11 @@ import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css } from 'lit';
 import { property } from 'lit/decorators.js';
 import type { Portfolio } from '../types';
+import type { Hass } from '../types';
+import { t } from '../localize';
 
 export class ParqetPortfolioSelector extends LitElement {
+  @property({ attribute: false }) hass?: Hass;
   @property({ type: Array }) portfolios: Portfolio[] = [];
   @property() selected: string | null = null;
 
@@ -23,7 +26,7 @@ export class ParqetPortfolioSelector extends LitElement {
     return html`
       <select
         class="selector"
-        aria-label="Select portfolio"
+        aria-label=${t('common.selectPortfolio', this.hass)}
         @change=${this._handleChange}
       >
         ${this.portfolios.map(

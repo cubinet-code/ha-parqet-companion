@@ -8,6 +8,7 @@ import type {
 } from './types';
 import { fmtCurrency, fmtPct, valueClass } from './utils';
 import { discoverPortfoliosForCard } from './discovery';
+import { languageFromHass, localeForHass, t } from './localize';
 import './components/loading-spinner';
 
 // ─── Card registration ──────────────────────────────────────────────────────
@@ -18,8 +19,8 @@ w['customCards'] = w['customCards'] || [];
 if (!w['customCards'].some((c: { type: string }) => c.type === 'parqet-snapshot-card')) {
   w['customCards'].push({
     type: 'parqet-snapshot-card',
-    name: 'Parqet Daily Snapshot',
-    description: 'Per-holding daily P&L based on custom snapshot time.',
+    name: t('snapshot.name'),
+    description: t('snapshot.description'),
     preview: false,
   });
 }
@@ -86,6 +87,7 @@ export class ParqetSnapshotCard extends LitElement {
   }
 
   static getConfigForm() {
+    const language = languageFromHass();
     return {
       schema: [
         {
@@ -115,11 +117,11 @@ export class ParqetSnapshotCard extends LitElement {
       ],
       computeLabel: (schema: { name: string }) => {
         const labels: Record<string, string> = {
-          device_id: 'Portfolio (leave empty for auto-detect)',
-          currency_symbol: 'Currency Symbol',
-          holdings_limit: 'Holdings Limit',
-          show_logo: 'Show Holding Logos',
-          compact: 'Compact Mode',
+          device_id: t('editor.device', language),
+          currency_symbol: t('editor.currencySymbol', language),
+          holdings_limit: t('editor.holdingsLimit', language),
+          show_logo: t('editor.showLogo', language),
+          compact: t('editor.compact', language),
         };
         return labels[schema.name] || schema.name;
       },
@@ -165,7 +167,7 @@ export class ParqetSnapshotCard extends LitElement {
       if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'not_enabled') {
         this._notEnabled = true;
       } else {
-        this._error = 'Failed to load snapshot data';
+        this._error = t('snapshot.loadError', this.hass);
       }
     } finally {
       this._loading = false;
@@ -179,7 +181,8 @@ export class ParqetSnapshotCard extends LitElement {
   private _fmtSnapshot(iso: string): string {
     try {
       const dt = new Date(iso);
-      return dt.toLocaleString(undefined, {
+      if (Number.isNaN(dt.getTime())) return iso;
+      return dt.toLocaleString(localeForHass(this.hass), {
         year: 'numeric', month: 'short', day: 'numeric',
         hour: '2-digit', minute: '2-digit',
       });
@@ -215,16 +218,16 @@ export class ParqetSnapshotCard extends LitElement {
           <div class="header">
             <span class="title">${this._portfolio.name}</span>
             ${this._data?.snapshot_taken_at ? html`
-              <span class="subtitle">vs. ${this._fmtSnapshot(this._data.snapshot_taken_at)}</span>
+              <span class="subtitle">${t('snapshot.compare', this.hass)} ${this._fmtSnapshot(this._data.snapshot_taken_at)}</span>
             ` : ''}
           </div>
         ` : ''}
 
         ${this._notEnabled ? html`
-          <div class="info">Enable daily snapshots in integration settings.</div>
+          <div class="info">${t('snapshot.enable', this.hass)}</div>
         ` : ''}
 
-        ${this._loading ? html`<parqet-loading-spinner></parqet-loading-spinner>` : ''}
+        ${this._loading ? html`<parqet-loading-spinner .hass=${this.hass}></parqet-loading-spinner>` : ''}
         ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : ''}
 
         ${this._data && !this._loading && !this._error ? (() => {
@@ -237,11 +240,11 @@ export class ParqetSnapshotCard extends LitElement {
             ${hasSnapshot ? html`
               <div class="summary">
                 <div class="summary-item">
-                  <span class="summary-label">Total</span>
+                  <span class="summary-label">${t('common.total', this.hass)}</span>
                   <span class="summary-value">${fmtCurrency(d.total_value, this._sym())}</span>
                 </div>
                 <div class="summary-item">
-                  <span class="summary-label">Daily P&amp;L</span>
+                  <span class="summary-label">${t('snapshot.dailyProfitLoss', this.hass)}</span>
                   <span class="summary-value ${valueClass(d.total_daily_pl)}">${fmtCurrency(d.total_daily_pl, this._sym())} (${fmtPct(d.total_daily_pl_pct)})</span>
                 </div>
               </div>
@@ -251,13 +254,13 @@ export class ParqetSnapshotCard extends LitElement {
               <table>
                 <thead>
                   <tr>
-                    <th class="sortable" @click=${() => this._toggleSort('name')}>Name</th>
-                    <th class="sortable num" @click=${() => this._toggleSort('value')}>Value</th>
+                    <th class="sortable" @click=${() => this._toggleSort('name')}>${t('common.name', this.hass)}</th>
+                    <th class="sortable num" @click=${() => this._toggleSort('value')}>${t('common.value', this.hass)}</th>
                     ${hasSnapshot ? html`
-                      <th class="sortable num" @click=${() => this._toggleSort('pl')}>P&amp;L</th>
-                      <th class="sortable num" @click=${() => this._toggleSort('plPct')}>P&amp;L%</th>
+                      <th class="sortable num" @click=${() => this._toggleSort('pl')}>${t('common.profitLoss', this.hass)}</th>
+                      <th class="sortable num" @click=${() => this._toggleSort('plPct')}>${t('common.profitLossPct', this.hass)}</th>
                     ` : ''}
-                    <th class="sortable num" @click=${() => this._toggleSort('weight')}>Weight</th>
+                    <th class="sortable num" @click=${() => this._toggleSort('weight')}>${t('common.weight', this.hass)}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -282,7 +285,7 @@ export class ParqetSnapshotCard extends LitElement {
             </div>
 
             ${!hasSnapshot ? html`
-              <div class="info">Waiting for first daily snapshot.</div>
+              <div class="info">${t('snapshot.waiting', this.hass)}</div>
             ` : ''}
           `;
         })() : ''}

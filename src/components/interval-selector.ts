@@ -3,8 +3,12 @@ import { LitElement, html, css } from 'lit';
 import { property } from 'lit/decorators.js';
 import { INTERVALS } from '../const';
 import type { IntervalValue } from '../const';
+import type { Hass } from '../types';
+import { t } from '../localize';
+import type { TranslationKey } from '../localize';
 
 export class ParqetIntervalSelector extends LitElement {
+  @property({ attribute: false }) hass?: Hass;
   @property() selected: IntervalValue = '1y';
 
   private _select(value: IntervalValue) {
@@ -20,15 +24,15 @@ export class ParqetIntervalSelector extends LitElement {
 
   render() {
     return html`
-      <div class="intervals" role="group" aria-label="Time interval">
+      <div class="intervals" role="group" aria-label=${t('common.timeInterval', this.hass)}>
         ${INTERVALS.map(
-          ({ value, label }) => html`
+          ({ value }) => html`
             <button
               class="btn ${this.selected === value ? 'active' : ''}"
               @click=${() => this._select(value)}
               aria-pressed=${this.selected === value}
             >
-              ${label}
+              ${t(`interval.short.${value}` as TranslationKey, this.hass)}
             </button>
           `,
         )}

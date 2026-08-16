@@ -3,20 +3,34 @@ import { LitElement, html, css } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, Activity, ActivityType, Holding } from '../types';
 import { fmtCurrency, fmtDate, getPortfolioRoutes, isRateLimitError } from '../utils';
+import { localeForHass, t as translate } from '../localize';
+import type { TranslationKey } from '../localize';
 import '../components/loading-spinner';
 
-const ACTIVITY_TYPES: { value: string; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'buy', label: 'Buy' },
-  { value: 'sell', label: 'Sell' },
-  { value: 'dividend', label: 'Dividend' },
-  { value: 'interest', label: 'Interest' },
-  { value: 'transfer_in', label: 'Transfer In' },
-  { value: 'transfer_out', label: 'Transfer Out' },
-  { value: 'fees_taxes', label: 'Fees/Taxes' },
-  { value: 'deposit', label: 'Deposit' },
-  { value: 'withdrawal', label: 'Withdrawal' },
+const ACTIVITY_TYPES: { value: string; key: TranslationKey }[] = [
+  { value: 'all', key: 'activities.all' },
+  { value: 'buy', key: 'activities.buy' },
+  { value: 'sell', key: 'activities.sell' },
+  { value: 'dividend', key: 'activities.dividend' },
+  { value: 'interest', key: 'activities.interest' },
+  { value: 'transfer_in', key: 'activities.transferIn' },
+  { value: 'transfer_out', key: 'activities.transferOut' },
+  { value: 'fees_taxes', key: 'activities.feesTaxes' },
+  { value: 'deposit', key: 'activities.deposit' },
+  { value: 'withdrawal', key: 'activities.withdrawal' },
 ];
+
+const ACTIVITY_TRANSLATION_KEYS: Partial<Record<ActivityType, TranslationKey>> = {
+  buy: 'activities.buy',
+  sell: 'activities.sell',
+  dividend: 'activities.dividend',
+  interest: 'activities.interest',
+  transfer_in: 'activities.transferIn',
+  transfer_out: 'activities.transferOut',
+  fees_taxes: 'activities.feesTaxes',
+  deposit: 'activities.deposit',
+  withdrawal: 'activities.withdrawal',
+};
 
 const BADGE_COLORS: Record<string, string> = {
   buy: '#4caf50',
@@ -72,7 +86,7 @@ export class ParqetActivitiesView extends LitElement {
       );
       for (const result of results) {
         for (const h of result.holdings || []) {
-          if (h.id) map.set(h.id, h.nickname ?? h.asset?.name ?? 'Unknown');
+          if (h.id) map.set(h.id, h.nickname ?? h.asset?.name ?? translate('common.unknown', this.hass));
         }
       }
       this._holdingsMap = map;
@@ -137,9 +151,9 @@ export class ParqetActivitiesView extends LitElement {
       this._hasMore = !this._isAggregated() && !!singleCursor;
     } catch (err: unknown) {
       if (isRateLimitError(err)) {
-        this._error = 'API rate limit reached — data will refresh automatically';
+        this._error = translate('activities.rateLimit', this.hass);
       } else {
-        this._error = 'Failed to load activities';
+        this._error = translate('activities.loadError', this.hass);
       }
     } finally {
       this._loading = false;
@@ -159,28 +173,28 @@ export class ParqetActivitiesView extends LitElement {
   render() {
     return html`
       <div class="filters">
-        ${ACTIVITY_TYPES.map((t) => html`
+        ${ACTIVITY_TYPES.map((activityType) => html`
           <button
-            class="chip ${this._filter === t.value ? 'active' : ''}"
-            @click=${() => this._onFilterChange(t.value)}
-          >${t.label}</button>
+            class="chip ${this._filter === activityType.value ? 'active' : ''}"
+            @click=${() => this._onFilterChange(activityType.value)}
+          >${translate(activityType.key, this.hass)}</button>
         `)}
       </div>
 
       ${this._error ? html`<div class="error">${this._error}</div>` : ''}
 
       ${this._activities.length === 0 && !this._loading
-        ? html`<div class="empty">No activities found.</div>`
+        ? html`<div class="empty">${translate('activities.none', this.hass)}</div>`
         : html`
           <div class="activity-list">
             ${this._activities.map((a) => this._renderActivity(a))}
           </div>
         `}
 
-      ${this._loading ? html`<parqet-loading-spinner></parqet-loading-spinner>` : ''}
+      ${this._loading ? html`<parqet-loading-spinner .hass=${this.hass}></parqet-loading-spinner>` : ''}
 
       ${this._hasMore && !this._loading ? html`
-        <button class="load-more" @click=${() => this._load(true)}>Load more</button>
+        <button class="load-more" @click=${() => this._load(true)}>${translate('activities.loadMore', this.hass)}</button>
       ` : ''}
     `;
   }
@@ -192,13 +206,16 @@ export class ParqetActivitiesView extends LitElement {
     }
     // Fall back to asset identifier.
     const asset = a.asset as Record<string, unknown> | undefined;
-    if (!asset) return 'Unknown';
-    return (asset.name ?? asset.symbol ?? asset.isin ?? 'Unknown') as string;
+    if (!asset) return translate('common.unknown', this.hass);
+    return (asset.name ?? asset.symbol ?? asset.isin ?? translate('common.unknown', this.hass)) as string;
   }
 
   private _renderActivity(a: Activity) {
     const badgeColor = BADGE_COLORS[a.type] ?? 'var(--secondary-text-color)';
-    const label = a.type.replace('_', ' ');
+    const translationKey = ACTIVITY_TRANSLATION_KEYS[a.type];
+    const label = translationKey
+      ? translate(translationKey, this.hass)
+      : String(a.type).replace(/_/g, ' ');
     const assetName = this._resolveAssetName(a);
 
     return html`
@@ -208,15 +225,15 @@ export class ParqetActivitiesView extends LitElement {
           <div class="activity-info">
             <span class="asset-name">${assetName}</span>
             <span class="activity-meta">
-              ${fmtDate(a.datetime)}${a.broker ? ` · ${a.broker}` : ''}
+              ${fmtDate(a.datetime, localeForHass(this.hass))}${a.broker ? ` · ${a.broker}` : ''}
             </span>
           </div>
         </div>
         <div class="activity-right">
           <span class="amount">${fmtCurrency(a.amount, this._sym())}</span>
           ${a.shares ? html`<span class="shares">${a.shares} @ ${fmtCurrency(a.price, this._sym())}</span>` : ''}
-          ${a.tax ? html`<span class="tax-fee">Tax: ${fmtCurrency(a.tax, this._sym())}</span>` : ''}
-          ${a.fee ? html`<span class="tax-fee">Fee: ${fmtCurrency(a.fee, this._sym())}</span>` : ''}
+          ${a.tax ? html`<span class="tax-fee">${translate('activities.tax', this.hass)}: ${fmtCurrency(a.tax, this._sym())}</span>` : ''}
+          ${a.fee ? html`<span class="tax-fee">${translate('activities.fee', this.hass)}: ${fmtCurrency(a.fee, this._sym())}</span>` : ''}
         </div>
       </div>
     `;
