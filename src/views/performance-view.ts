@@ -5,6 +5,7 @@ import type { Hass, ParqetCardConfig, DiscoveredPortfolio, PortfolioPerformance 
 import type { IntervalValue } from '../const';
 import type { StackedSegment } from '../components/stacked-bar';
 import { fmtCurrency, fmtPct, valueClass } from '../utils';
+import { t } from '../localize';
 import '../components/interval-selector';
 import '../components/loading-spinner';
 import '../components/stacked-bar';
@@ -28,6 +29,7 @@ export class ParqetPerformanceView extends LitElement {
     return html`
       ${this.config?.show_interval_selector !== false ? html`
         <parqet-interval-selector
+          .hass=${this.hass}
           .selected=${this.interval}
           @interval-change=${(e: CustomEvent) =>
             this.dispatchEvent(new CustomEvent('interval-change', { detail: e.detail, bubbles: true, composed: true }))}
@@ -35,21 +37,21 @@ export class ParqetPerformanceView extends LitElement {
       ` : ''}
 
       ${this.error ? html`<div class="error" role="alert">${this.error}</div>` : ''}
-      ${this.loading ? html`<parqet-loading-spinner></parqet-loading-spinner>` : ''}
+      ${this.loading ? html`<parqet-loading-spinner .hass=${this.hass}></parqet-loading-spinner>` : ''}
 
       ${d ? html`
         <div class="kpi-grid ${this.config?.compact ? 'compact' : ''}">
-          ${this._kpi('Total Value', fmtCurrency(d.valuation?.atIntervalEnd, this._sym()))}
-          ${this._kpi('XIRR', fmtPct(d.kpis?.inInterval?.xirr), d.kpis?.inInterval?.xirr)}
-          ${this._kpi('TTWROR', fmtPct(d.kpis?.inInterval?.ttwror), d.kpis?.inInterval?.ttwror)}
-          ${this._kpi('Unrealized Gain', fmtCurrency(d.unrealizedGains?.inInterval?.gainGross, this._sym()), d.unrealizedGains?.inInterval?.gainGross)}
-          ${this._kpi('Realized Gain', fmtCurrency(d.realizedGains?.inInterval?.gainGross, this._sym()), d.realizedGains?.inInterval?.gainGross)}
-          ${this._kpi('Dividends', fmtCurrency(d.dividends?.inInterval?.gainGross, this._sym()))}
-          ${this._kpi('Fees', fmtCurrency(d.fees?.inInterval?.fees, this._sym()))}
-          ${this._kpi('Taxes', fmtCurrency(d.taxes?.inInterval?.taxes, this._sym()))}
+          ${this._kpi(t('performance.totalValue', this.hass), fmtCurrency(d.valuation?.atIntervalEnd, this._sym()))}
+          ${this._kpi(t('performance.xirr', this.hass), fmtPct(d.kpis?.inInterval?.xirr), d.kpis?.inInterval?.xirr)}
+          ${this._kpi(t('performance.ttwror', this.hass), fmtPct(d.kpis?.inInterval?.ttwror), d.kpis?.inInterval?.ttwror)}
+          ${this._kpi(t('performance.unrealizedGain', this.hass), fmtCurrency(d.unrealizedGains?.inInterval?.gainGross, this._sym()), d.unrealizedGains?.inInterval?.gainGross)}
+          ${this._kpi(t('performance.realizedGain', this.hass), fmtCurrency(d.realizedGains?.inInterval?.gainGross, this._sym()), d.realizedGains?.inInterval?.gainGross)}
+          ${this._kpi(t('common.dividends', this.hass), fmtCurrency(d.dividends?.inInterval?.gainGross, this._sym()))}
+          ${this._kpi(t('common.fees', this.hass), fmtCurrency(d.fees?.inInterval?.fees, this._sym()))}
+          ${this._kpi(t('common.taxes', this.hass), fmtCurrency(d.taxes?.inInterval?.taxes, this._sym()))}
         </div>
         ${(this.config?.show_performance_chart ?? this.config?.show_chart) !== false ? this._renderChart(d) : ''}
-      ` : !this.loading ? html`<div class="empty">No data available.</div>` : ''}
+      ` : !this.loading ? html`<div class="empty">${t('performance.noData', this.hass)}</div>` : ''}
     `;
   }
 
@@ -64,15 +66,15 @@ export class ParqetPerformanceView extends LitElement {
 
   private _renderChart(d: PortfolioPerformance) {
     const segments: StackedSegment[] = [
-      { label: 'Unrealized', value: d.unrealizedGains?.inInterval?.gainGross ?? 0, color: 'var(--success-color, #4caf50)' },
-      { label: 'Realized', value: d.realizedGains?.inInterval?.gainGross ?? 0, color: '#4285f4' },
-      { label: 'Dividends', value: d.dividends?.inInterval?.gainGross ?? 0, color: '#46bdc6' },
-      { label: 'Fees', value: -(d.fees?.inInterval?.fees ?? 0), color: '#ff6d01' },
-      { label: 'Taxes', value: -(d.taxes?.inInterval?.taxes ?? 0), color: 'var(--error-color, #f44336)' },
+      { label: t('performance.unrealized', this.hass), value: d.unrealizedGains?.inInterval?.gainGross ?? 0, color: 'var(--success-color, #4caf50)' },
+      { label: t('performance.realized', this.hass), value: d.realizedGains?.inInterval?.gainGross ?? 0, color: '#4285f4' },
+      { label: t('common.dividends', this.hass), value: d.dividends?.inInterval?.gainGross ?? 0, color: '#46bdc6' },
+      { label: t('common.fees', this.hass), value: -(d.fees?.inInterval?.fees ?? 0), color: '#ff6d01' },
+      { label: t('common.taxes', this.hass), value: -(d.taxes?.inInterval?.taxes ?? 0), color: 'var(--error-color, #f44336)' },
     ].filter((s) => s.value !== 0);
 
     if (segments.length === 0) return '';
-    return html`<parqet-stacked-bar .segments=${segments} .currencySymbol=${this._sym()}></parqet-stacked-bar>`;
+    return html`<parqet-stacked-bar .hass=${this.hass} .segments=${segments} .currencySymbol=${this._sym()}></parqet-stacked-bar>`;
   }
 
   static styles = css`

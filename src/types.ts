@@ -24,6 +24,10 @@ export interface HassEntityRegistryDisplayEntry {
 }
 
 export interface Hass {
+  language?: string;
+  locale?: {
+    language?: string;
+  };
   states: Record<string, HassEntity>;
   devices?: Record<string, HassDeviceRegistryEntry>;
   entities?: Record<string, HassEntityRegistryDisplayEntry>;
@@ -86,7 +90,7 @@ export interface Holding {
   earliestActivityDate: string;
 }
 
-export type ActivityType =
+export type KnownActivityType =
   | 'buy'
   | 'sell'
   | 'dividend'
@@ -96,6 +100,8 @@ export type ActivityType =
   | 'fees_taxes'
   | 'deposit'
   | 'withdrawal';
+
+export type ActivityType = string;
 
 export interface Activity {
   id: string;

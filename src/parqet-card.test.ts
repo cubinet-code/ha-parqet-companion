@@ -131,4 +131,24 @@ describe('ParqetCompanionCard combined routing', () => {
     expect(afterRemoval.portfolioId).toBe('__all__');
     expect(afterRemoval.entryId).not.toBe('entry_combined');
   });
+
+  it('localizes the visual editor for a German Home Assistant UI', () => {
+    const previousLanguage = document.documentElement.lang;
+    document.documentElement.lang = 'de-DE';
+    try {
+      const form = Card.getConfigForm();
+      const defaultView = form.schema.find(
+        (item: { name: string }) => item.name === 'default_view',
+      );
+
+      expect(form.computeLabel({ name: 'default_interval' })).toBe('Standardzeitraum');
+      expect(form.computeLabel({ name: 'holdings_limit' })).toBe('Maximale Positionen');
+      expect(defaultView.selector.select.options).toContainEqual({
+        value: 'holdings',
+        label: 'Positionen',
+      });
+    } finally {
+      document.documentElement.lang = previousLanguage;
+    }
+  });
 });

@@ -1,6 +1,8 @@
 import { registerElement } from '../diagnostics-frontend';
-import { LitElement, html, css, svg } from 'lit';
+import { LitElement, html, css } from 'lit';
 import { property } from 'lit/decorators.js';
+import type { Hass } from '../types';
+import { t } from '../localize';
 
 export interface StackedSegment {
   label: string;
@@ -12,6 +14,7 @@ const BAR_H = 18;
 const BAR_RX = 4;
 
 export class ParqetStackedBar extends LitElement {
+  @property({ attribute: false }) hass?: Hass;
   @property({ type: Array }) segments: StackedSegment[] = [];
   @property({ type: String }) currencySymbol = '€';
 
@@ -27,10 +30,10 @@ export class ParqetStackedBar extends LitElement {
 
   render() {
     const items = this.segments.filter((s) => s.value !== 0);
-    if (items.length === 0) return html`<div class="empty">No data</div>`;
+    if (items.length === 0) return html`<div class="empty">${t('common.noData', this.hass)}</div>`;
 
     const total = items.reduce((sum, s) => sum + Math.abs(s.value), 0);
-    if (total === 0) return html`<div class="empty">No data</div>`;
+    if (total === 0) return html`<div class="empty">${t('common.noData', this.hass)}</div>`;
 
     // Build segments with percentage widths
     const segs = items.map((s) => ({

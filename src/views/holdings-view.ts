@@ -4,6 +4,7 @@ import { property, state } from 'lit/decorators.js';
 import type { Hass, ParqetCardConfig, DiscoveredPortfolio, Holding } from '../types';
 import type { IntervalValue } from '../const';
 import { fmtCurrency, fmtPct, valueClass } from '../utils';
+import { t } from '../localize';
 import '../components/interval-selector';
 import '../components/loading-spinner';
 import '../components/donut-chart';
@@ -63,15 +64,16 @@ export class ParqetHoldingsView extends LitElement {
     return html`
       ${this.config?.show_interval_selector !== false ? html`
         <parqet-interval-selector
+          .hass=${this.hass}
           .selected=${this.interval}
           @interval-change=${(e: CustomEvent) =>
             this.dispatchEvent(new CustomEvent('interval-change', { detail: e.detail, bubbles: true, composed: true }))}
         ></parqet-interval-selector>
       ` : ''}
 
-      ${this.loading ? html`<parqet-loading-spinner></parqet-loading-spinner>` : ''}
+      ${this.loading ? html`<parqet-loading-spinner .hass=${this.hass}></parqet-loading-spinner>` : ''}
       ${this.error ? html`<div class="error" role="alert">${this.error}</div>` : ''}
-      ${!this.loading && !this.error && !this.holdingsData.length ? html`<div class="empty">No holdings found.</div>` : ''}
+      ${!this.loading && !this.error && !this.holdingsData.length ? html`<div class="empty">${t('holdings.none', this.hass)}</div>` : ''}
 
       ${!this.loading && !this.error && this.holdingsData.length ? (() => {
         const total = this._totalValue();
@@ -81,9 +83,10 @@ export class ParqetHoldingsView extends LitElement {
         return html`
       ${(this.config?.show_allocation_chart ?? this.config?.show_chart) !== false ? html`
         <parqet-donut-chart
+          .hass=${this.hass}
           .segments=${(() => {
             const top = sorted.slice(0, 20).map((h, i) => ({
-              label: h.nickname ?? h.asset?.name ?? 'Unknown',
+              label: h.nickname ?? h.asset?.name ?? t('common.unknown', this.hass),
               value: h.position?.currentValue ?? 0,
               color: CHART_COLORS[i % CHART_COLORS.length],
             }));
@@ -92,7 +95,7 @@ export class ParqetHoldingsView extends LitElement {
                 (sum, h) => sum + (h.position?.currentValue ?? 0), 0
               );
               if (otherValue > 0) {
-                top.push({ label: 'Other', value: otherValue, color: '#9e9e9e' });
+                top.push({ label: t('holdings.other', this.hass), value: otherValue, color: '#9e9e9e' });
               }
             }
             return top;
@@ -104,11 +107,11 @@ export class ParqetHoldingsView extends LitElement {
         <table>
           <thead>
             <tr>
-              <th class="sortable" @click=${() => this._toggleSort('name')}>Name</th>
-              <th class="sortable num" @click=${() => this._toggleSort('value')}>Value</th>
-              <th class="sortable num" @click=${() => this._toggleSort('pl')}>P&amp;L</th>
-              <th class="sortable num" @click=${() => this._toggleSort('plPct')}>P&amp;L%</th>
-              <th class="sortable num" @click=${() => this._toggleSort('weight')}>Weight</th>
+              <th class="sortable" @click=${() => this._toggleSort('name')}>${t('common.name', this.hass)}</th>
+              <th class="sortable num" @click=${() => this._toggleSort('value')}>${t('common.value', this.hass)}</th>
+              <th class="sortable num" @click=${() => this._toggleSort('pl')}>${t('common.profitLoss', this.hass)}</th>
+              <th class="sortable num" @click=${() => this._toggleSort('plPct')}>${t('common.profitLossPct', this.hass)}</th>
+              <th class="sortable num" @click=${() => this._toggleSort('weight')}>${t('common.weight', this.hass)}</th>
             </tr>
           </thead>
           <tbody>
@@ -123,7 +126,7 @@ export class ParqetHoldingsView extends LitElement {
                   <td>
                     <div class="holding-name">
                       ${this.config?.show_logo !== false && h.logo ? html`<img class="logo" src=${h.logo} alt="" />` : ''}
-                      <span>${h.nickname ?? h.asset?.name ?? 'Unknown'}</span>
+                      <span>${h.nickname ?? h.asset?.name ?? t('common.unknown', this.hass)}</span>
                     </div>
                   </td>
                   <td class="num">${fmtCurrency(h.position?.currentValue, this._sym())}</td>
@@ -135,12 +138,12 @@ export class ParqetHoldingsView extends LitElement {
                   <tr class="detail-row">
                     <td colspan="5">
                       <div class="detail-grid">
-                        <span>Shares: ${h.position?.shares?.toFixed(4)}</span>
-                        <span>Avg Price: ${fmtCurrency(h.position?.purchasePrice, this._sym())}</span>
-                        <span>Current: ${fmtCurrency(h.position?.currentPrice, this._sym())}</span>
+                        <span>${t('holdings.shares', this.hass)}: ${h.position?.shares?.toFixed(4)}</span>
+                        <span>${t('holdings.averagePrice', this.hass)}: ${fmtCurrency(h.position?.purchasePrice, this._sym())}</span>
+                        <span>${t('holdings.current', this.hass)}: ${fmtCurrency(h.position?.currentPrice, this._sym())}</span>
                         <span>XIRR: ${fmtPct(h.performance?.kpis?.inInterval?.xirr)}</span>
-                        <span>Dividends: ${fmtCurrency(h.performance?.dividends?.inInterval?.gainGross, this._sym())}</span>
-                        <span>Fees: ${fmtCurrency(h.performance?.fees?.inInterval?.fees, this._sym())}</span>
+                        <span>${t('common.dividends', this.hass)}: ${fmtCurrency(h.performance?.dividends?.inInterval?.gainGross, this._sym())}</span>
+                        <span>${t('common.fees', this.hass)}: ${fmtCurrency(h.performance?.fees?.inInterval?.fees, this._sym())}</span>
                       </div>
                     </td>
                   </tr>

@@ -1,6 +1,8 @@
 import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css, svg } from 'lit';
 import { property } from 'lit/decorators.js';
+import type { Hass } from '../types';
+import { t } from '../localize';
 
 export interface DonutSegment {
   label: string;
@@ -14,6 +16,7 @@ const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export class ParqetDonutChart extends LitElement {
+  @property({ attribute: false }) hass?: Hass;
   @property({ type: Array }) segments: DonutSegment[] = [];
   @property({ type: String }) centerLabel = '';
   @property({ type: String }) centerSub = '';
@@ -21,7 +24,7 @@ export class ParqetDonutChart extends LitElement {
   render() {
     const total = this.segments.reduce((s, seg) => s + Math.abs(seg.value), 0);
     if (total === 0 || this.segments.length === 0) {
-      return html`<div class="empty">No data</div>`;
+      return html`<div class="empty">${t('common.noData', this.hass)}</div>`;
     }
 
     const center = SIZE / 2;
@@ -29,7 +32,7 @@ export class ParqetDonutChart extends LitElement {
 
     return html`
       <div class="chart-container">
-        <svg viewBox="0 0 ${SIZE} ${SIZE}" class="donut" role="img" aria-label="Portfolio allocation chart">
+        <svg viewBox="0 0 ${SIZE} ${SIZE}" class="donut" role="img" aria-label=${t('common.portfolioAllocationChart', this.hass)}>
           ${this.segments.map((seg) => {
             const pct = Math.abs(seg.value) / total;
             const dash = pct * CIRCUMFERENCE;

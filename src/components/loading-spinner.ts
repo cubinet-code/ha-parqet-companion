@@ -1,10 +1,15 @@
 import { registerElement } from '../diagnostics-frontend';
 import { LitElement, html, css } from 'lit';
+import { property } from 'lit/decorators.js';
+import type { Hass } from '../types';
+import { t } from '../localize';
 
 export class ParqetLoadingSpinner extends LitElement {
+  @property({ attribute: false }) hass?: Hass;
+
   render() {
     return html`
-      <div class="container" role="status" aria-label="Loading">
+      <div class="container" role="status" aria-label=${t('common.loading', this.hass)}>
         <div class="spinner"></div>
       </div>
     `;

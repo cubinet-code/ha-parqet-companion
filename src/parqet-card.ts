@@ -12,12 +12,20 @@ import type { Hass, ParqetCardConfig, ViewType, DiscoveredPortfolio, PortfolioPe
 import type { IntervalValue } from './const';
 import { discoverCombinedPortfolio, discoverPortfoliosForCard } from './discovery';
 import { buildPerformanceMsg, isRateLimitError } from './utils';
+import { languageFromHass, t } from './localize';
+import type { TranslationKey } from './localize';
 
 import './components/loading-spinner';
 import './views/performance-view';
 import './views/holdings-view';
 import './views/activities-view';
 import './parqet-snapshot-card';
+
+const VIEW_TRANSLATION_KEYS: Record<ViewType, TranslationKey> = {
+  performance: 'views.performance',
+  holdings: 'views.holdings',
+  activities: 'views.activities',
+};
 
 // ─── Card registration ────────────────────────────────────────────────────────
 
@@ -28,7 +36,7 @@ if (!w['customCards'].some((c: { type: string }) => c.type === 'parqet-companion
   w['customCards'].push({
     type: 'parqet-companion-card',
     name: 'Parqet Companion',
-    description: 'Display your Parqet portfolio data — performance, holdings and activities.',
+    description: t('card.description'),
     preview: true,
     documentationURL: 'https://github.com/cubinet-code/ha-parqet-companion',
   });
@@ -79,6 +87,7 @@ export class ParqetCompanionCard extends LitElement {
   }
 
   static getConfigForm() {
+    const language = languageFromHass();
     return {
       schema: [
         // ── General ──
@@ -95,9 +104,9 @@ export class ParqetCompanionCard extends LitElement {
           selector: {
             select: {
               options: [
-                { value: 'performance', label: 'Performance' },
-                { value: 'holdings', label: 'Holdings' },
-                { value: 'activities', label: 'Activities' },
+                { value: 'performance', label: t('views.performance', language) },
+                { value: 'holdings', label: t('views.holdings', language) },
+                { value: 'activities', label: t('views.activities', language) },
               ],
             },
           },
@@ -110,7 +119,7 @@ export class ParqetCompanionCard extends LitElement {
         {
           name: '',
           type: 'expandable' as const,
-          title: 'Performance',
+          title: t('views.performance', language),
           icon: 'mdi:chart-line',
           schema: [
             {
@@ -118,18 +127,18 @@ export class ParqetCompanionCard extends LitElement {
               selector: {
                 select: {
                   options: [
-                    { value: '1d', label: '1 Day' },
-                    { value: '1w', label: '1 Week' },
-                    { value: 'mtd', label: 'Month to Date' },
-                    { value: '1m', label: '1 Month' },
-                    { value: '3m', label: '3 Months' },
-                    { value: '6m', label: '6 Months' },
-                    { value: '1y', label: '1 Year' },
-                    { value: 'ytd', label: 'Year to Date' },
-                    { value: '3y', label: '3 Years' },
-                    { value: '5y', label: '5 Years' },
-                    { value: '10y', label: '10 Years' },
-                    { value: 'max', label: 'Maximum' },
+                    { value: '1d', label: t('interval.1d', language) },
+                    { value: '1w', label: t('interval.1w', language) },
+                    { value: 'mtd', label: t('interval.mtd', language) },
+                    { value: '1m', label: t('interval.1m', language) },
+                    { value: '3m', label: t('interval.3m', language) },
+                    { value: '6m', label: t('interval.6m', language) },
+                    { value: '1y', label: t('interval.1y', language) },
+                    { value: 'ytd', label: t('interval.ytd', language) },
+                    { value: '3y', label: t('interval.3y', language) },
+                    { value: '5y', label: t('interval.5y', language) },
+                    { value: '10y', label: t('interval.10y', language) },
+                    { value: 'max', label: t('interval.max', language) },
                   ],
                 },
               },
@@ -148,7 +157,7 @@ export class ParqetCompanionCard extends LitElement {
         {
           name: '',
           type: 'expandable' as const,
-          title: 'Holdings',
+          title: t('views.holdings', language),
           icon: 'mdi:chart-donut',
           schema: [
             {
@@ -169,7 +178,7 @@ export class ParqetCompanionCard extends LitElement {
         {
           name: '',
           type: 'expandable' as const,
-          title: 'Activities',
+          title: t('views.activities', language),
           icon: 'mdi:format-list-bulleted',
           schema: [
             {
@@ -182,7 +191,7 @@ export class ParqetCompanionCard extends LitElement {
         {
           name: '',
           type: 'expandable' as const,
-          title: 'Layout',
+          title: t('views.layout', language),
           icon: 'mdi:page-layout-body',
           schema: [
             {
@@ -198,18 +207,18 @@ export class ParqetCompanionCard extends LitElement {
       ],
       computeLabel: (schema: { name: string }) => {
         const labels: Record<string, string> = {
-          device_id: 'Portfolio (leave empty for auto-detect)',
-          default_view: 'Default View',
-          default_interval: 'Default Interval',
-          currency_symbol: 'Currency Symbol',
-          holdings_limit: 'Holdings Limit',
-          activities_limit: 'Activities Limit',
-          show_interval_selector: 'Show Interval Selector',
-          show_performance_chart: 'Show Performance Chart',
-          show_allocation_chart: 'Show Allocation Chart',
-          show_logo: 'Show Holding Logos',
-          compact: 'Compact Mode',
-          hide_header: 'Hide Header',
+          device_id: t('editor.device', language),
+          default_view: t('editor.defaultView', language),
+          default_interval: t('editor.defaultInterval', language),
+          currency_symbol: t('editor.currencySymbol', language),
+          holdings_limit: t('editor.holdingsLimit', language),
+          activities_limit: t('editor.activitiesLimit', language),
+          show_interval_selector: t('editor.showIntervalSelector', language),
+          show_performance_chart: t('editor.showPerformanceChart', language),
+          show_allocation_chart: t('editor.showAllocationChart', language),
+          show_logo: t('editor.showLogo', language),
+          compact: t('editor.compact', language),
+          hide_header: t('editor.hideHeader', language),
         };
         return labels[schema.name] ?? schema.name;
       },
@@ -282,7 +291,7 @@ export class ParqetCompanionCard extends LitElement {
     if (new Set(portfolios.map((portfolio) => portfolio.entryId)).size > 1) {
       return discoverCombinedPortfolio(this.hass)?.name ?? 'Parqet Combined';
     }
-    return 'All Portfolios';
+    return t('card.allPortfolios', this.hass);
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -292,8 +301,8 @@ export class ParqetCompanionCard extends LitElement {
       return html`
         <ha-card>
           <div class="empty">
-            <span>No Parqet portfolios found</span>
-            <span class="hint">Add the Parqet Companion integration first</span>
+            <span>${t('card.noPortfolios', this.hass)}</span>
+            <span class="hint">${t('card.addIntegration', this.hass)}</span>
           </div>
         </ha-card>
       `;
@@ -309,7 +318,11 @@ export class ParqetCompanionCard extends LitElement {
         ${!this._config?.hide_header ? html`
           <div class="card-header">
             ${this._portfolios.length > 1 ? html`
-              <select class="portfolio-select" @change=${this._onPortfolioChange}>
+              <select
+                class="portfolio-select"
+                aria-label=${t('common.selectPortfolio', this.hass)}
+                @change=${this._onPortfolioChange}
+              >
                 ${this._canAggregateAll() ? html`
                   <option value="-1" ?selected=${this._selectedIndex === -1}>${this._aggregateOptionLabel()}</option>
                 ` : ''}
@@ -322,7 +335,7 @@ export class ParqetCompanionCard extends LitElement {
         ` : ''}
 
         ${this._rateLimited ? html`
-          <div class="rate-limit" role="alert">API rate limit reached — wait a few minutes before retrying; reloading now makes it worse</div>
+          <div class="rate-limit" role="alert">${t('card.rateLimitWarning', this.hass)}</div>
         ` : ''}
 
         <div class="tabs" role="tablist">
@@ -333,7 +346,7 @@ export class ParqetCompanionCard extends LitElement {
               aria-selected=${this._activeView === v}
               @click=${() => (this._activeView = v)}
             >
-              ${v.charAt(0).toUpperCase() + v.slice(1)}
+              ${t(VIEW_TRANSLATION_KEYS[v], this.hass)}
             </button>
           `)}
         </div>
@@ -413,9 +426,9 @@ export class ParqetCompanionCard extends LitElement {
       if (gen !== this._fetchGen) return;
       if (isRateLimitError(err)) {
         this._rateLimited = true;
-        this._dataError = (err as { message?: string }).message || 'Rate limit exceeded';
+        this._dataError = t('card.rateLimitError', this.hass);
       } else {
-        this._dataError = 'Failed to load data';
+        this._dataError = t('card.loadError', this.hass);
       }
       this._perfData = null;
       this._holdingsData = [];
@@ -478,7 +491,7 @@ export class ParqetCompanionCard extends LitElement {
     this._cachedProxy = {
       entryId: this._portfolios[0]?.entryId ?? '__all__',
       portfolioId: '__all__',
-      name: 'All Portfolios',
+      name: t('card.allPortfolios', this.hass),
       entityPrefix: null,
       sensors: {},
       _portfolios: this._portfolios.map((p) => ({
